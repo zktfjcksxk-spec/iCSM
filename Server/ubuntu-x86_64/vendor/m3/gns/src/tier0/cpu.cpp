@@ -38,7 +38,11 @@
 #if !defined( _PS3 )
 static bool cpuid(uint32 function, uint32& out_eax, uint32& out_ebx, uint32& out_ecx, uint32& out_edx)
 {
-#if defined(GNUC)
+#if defined(__aarch64__)
+	// AArch64 has no x86 CPUID features; select the existing portable crypto.
+	out_eax = out_ebx = out_ecx = out_edx = 0;
+	return false;
+#elif defined(GNUC)
 #if defined(PLATFORM_64BITS)
 	asm("mov %%rbx, %%rsi\n\t"
 		"cpuid\n\t"

@@ -35,7 +35,9 @@ to the following restrictions:
 extern "C" {
 #endif
 #ifndef _GAMECONSOLE
+#if defined(_WIN32)
 #pragma comment(lib, "WSOCK32.LIB")
+#endif
 #endif
 struct SQDbgServer;
 typedef SQDbgServer* HSQREMOTEDBG;

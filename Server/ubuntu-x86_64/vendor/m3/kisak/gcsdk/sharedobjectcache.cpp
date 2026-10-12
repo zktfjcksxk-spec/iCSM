@@ -59,18 +59,7 @@ CSharedObjectTypeCache::~CSharedObjectTypeCache()
 // Purpose: Common shared add-to-cache code shared between AddObject() and
 //			AddObjectClean().
 //----------------------------------------------------------------------------
-void CSharedObjectTypeCache::AddObjectInternal( CSharedObject *pObject )
-{
-	Assert( pObject );
 
-	m_vecObjects.AddToTail( pObject );
-#ifdef GC
-#if ENABLE_SO_CONSTRUCT_DESTRUCT_PARANOIA
-	AssertMsg1( pObject->m_nRefCount >= 0, "AddObjectInternal(): Invalid ref count for shared object %s", pObject->GetDebugString().String() );
-	++pObject->m_nRefCount;
-#endif // ENABLE_SO_CONSTRUCT_DESTRUCT_PARANOIA
-#endif
-}
 
 //----------------------------------------------------------------------------
 // Purpose: Adds a shared object of the appropriate type to this type cache.
@@ -82,7 +71,7 @@ bool CSharedObjectTypeCache::AddObject( CSharedObject *pObject )
 	if( m_vecObjects.HasElement( pObject ) )
 		return false;
 
-	AddObjectInternal( pObject );
+	m_vecObjects.AddToTail( pObject );
 	return true;
 }
 
@@ -104,7 +93,7 @@ bool CSharedObjectTypeCache::AddObjectClean( CSharedObject *pObject )
 	}
 #endif
 
-	AddObjectInternal( pObject );
+	m_vecObjects.AddToTail( pObject );
 	return true;
 }
 
@@ -143,25 +132,7 @@ CSharedObject *CSharedObjectTypeCache::RemoveObjectByIndex( uint32 nObj )
 //----------------------------------------------------------------------------
 // Purpose: Empties the object lists and deletes all elements
 //----------------------------------------------------------------------------
-void CSharedObjectTypeCache::DestroyAllObjects()
-{
-	for ( int i = 0; i < m_vecObjects.Count(); i++ )
-	{
-#ifdef GC
-		if ( m_vecObjects[i]->BShouldDeleteByCache() )
-		{
-#if ENABLE_SO_CONSTRUCT_DESTRUCT_PARANOIA
-			--m_vecObjects[i]->m_nRefCount;
-			AssertMsg1( m_vecObjects[i]->m_nRefCount == 0, "Destroying shared object %s that's still in use!", m_vecObjects[i]->GetDebugString().String() );
-#endif // ENABLE_SO_CONSTRUCT_DESTRUCT_PARANOIA
-			delete m_vecObjects[i];
-		}
-#else
-		delete m_vecObjects[i];
-#endif
-	}
-	m_vecObjects.Purge();
-}
+
 
 
 //----------------------------------------------------------------------------
@@ -247,8 +218,7 @@ void CSharedObjectTypeCache::Validate( CValidator &validator, const char *pchNam
 // Purpose: Constructor
 //----------------------------------------------------------------------------
 CSharedObjectCache::CSharedObjectCache( ) 
-: m_mapObjects( DefLessFunc(int) )
-, m_ulVersion( 0 )
+: m_ulVersion( 0 )
 {
 
 }
@@ -259,11 +229,11 @@ CSharedObjectCache::CSharedObjectCache( )
 //----------------------------------------------------------------------------
 CSharedObjectCache::~CSharedObjectCache()
 {
-	FOR_EACH_MAP( m_mapObjects, nTypeIndex )
+	FOR_EACH_VEC( m_CacheObjects, nTypeIndex )
 	{
-		delete m_mapObjects[nTypeIndex];
+		delete m_CacheObjects[nTypeIndex];
 	}
-	m_mapObjects.Purge();
+	m_CacheObjects.Purge();
 }
 
 
@@ -271,15 +241,15 @@ CSharedObjectCache::~CSharedObjectCache()
 // Purpose: Returns the type cache for the specified type ID, returning NULL
 //			if the cache didn't previously exist.
 //----------------------------------------------------------------------------
-CSharedObjectTypeCache *CSharedObjectCache::FindBaseTypeCache( int nClassID ) const
+const CSharedObjectTypeCache *CSharedObjectCache::FindBaseTypeCache( int nClassID ) const
 {
-	int nIndex = m_mapObjects.Find( nClassID );
-	CSharedObjectTypeCache *pTypeCache = NULL;
-	if( m_mapObjects.IsValidIndex( nIndex ) )
-	{
-		pTypeCache = m_mapObjects[nIndex];
-	}
-	return pTypeCache;
+ FOR_EACH_VEC( m_CacheObjects, index )
+  if ( m_CacheObjects[index]->GetTypeID() == nClassID ) return m_CacheObjects[index];
+ return NULL;
+}
+CSharedObjectTypeCache *CSharedObjectCache::FindBaseTypeCache( int nClassID )
+{
+ return const_cast<CSharedObjectTypeCache *>( static_cast<const CSharedObjectCache *>(this)->FindBaseTypeCache( nClassID ) );
 }
 
 //----------------------------------------------------------------------------
@@ -296,14 +266,9 @@ CSharedObjectTypeCache *CSharedObjectCache::CreateBaseTypeCache( int nClassID )
 	
 	//nope, need to create one
 	CSharedObjectTypeCache* pTypeCache = AllocateTypeCache( nClassID );
-	m_mapObjects.Insert( nClassID, pTypeCache );
-#if 0
-	// Kyle says: this is the newer way of managing caches on Dota but we haven't
-	//			  brought any of it over yet
 	m_CacheObjects.AddToTail( pTypeCache );
-	//sort this cache for faster access
-	std::sort( m_CacheObjects.begin(), m_CacheObjects.end(), SortCacheByTypeID );
-#endif
+	std::sort( m_CacheObjects.begin(), m_CacheObjects.end(),
+	 []( const CSharedObjectTypeCache *a, const CSharedObjectTypeCache *b ) { return a->GetTypeID() < b->GetTypeID(); } );
 	return pTypeCache;
 }
 
@@ -341,13 +306,14 @@ CSharedObject *CSharedObjectCache::RemoveObject( const CSharedObject & soIndex )
 //----------------------------------------------------------------------------
 // Purpose: Empties the object lists but doesn't delete any of the objects
 //----------------------------------------------------------------------------
-void CSharedObjectCache::RemoveAllObjectsWithoutDeleting()
+bool CSharedObjectCache::RemoveAllObjectsWithoutDeleting()
 {
-	FOR_EACH_MAP_FAST( m_mapObjects, nType )
+	FOR_EACH_VEC( m_CacheObjects, nType )
 	{
-		m_mapObjects[nType]->RemoveAllObjectsWithoutDeleting();
+		m_CacheObjects[nType]->RemoveAllObjectsWithoutDeleting();
 	}
 	MarkDirty();
+	return true;
 }
 
 
@@ -369,10 +335,10 @@ CSharedObject *CSharedObjectCache::FindSharedObject( const CSharedObject & soInd
 //----------------------------------------------------------------------------
 void CSharedObjectCache::Dump() const
 {
-	EmitInfo( SPEW_CONSOLE, SPEW_ALWAYS, LOG_ALWAYS, "SharedObjectCache for %s (%d types):\n", GetOwner().Render(), m_mapObjects.Count() );
-	FOR_EACH_MAP( m_mapObjects, nTypeIndex )
+	EmitInfo( SPEW_CONSOLE, SPEW_ALWAYS, LOG_ALWAYS, "SharedObjectCache owner type=%u id=%llu (%d types):\n", GetOwner().Type(), (unsigned long long)GetOwner().ID(), m_CacheObjects.Count() );
+	FOR_EACH_VEC( m_CacheObjects, nTypeIndex )
 	{
-		m_mapObjects[nTypeIndex]->Dump();
+		m_CacheObjects[nTypeIndex]->Dump();
 	}
 }
 
@@ -385,13 +351,29 @@ void CSharedObjectCache::Validate( CValidator &validator, const char *pchName )
 {
 	VALIDATE_SCOPE();
 
-	ValidateObj( m_mapObjects );
-	FOR_EACH_MAP( m_mapObjects, nTypeIndex )
+	ValidateObj( m_CacheObjects );
+	FOR_EACH_VEC( m_CacheObjects, nTypeIndex )
 	{
-		m_mapObjects[nTypeIndex]->Validate( validator, "m_mapObjects[n]" );
+		m_CacheObjects[nTypeIndex]->Validate( validator, "m_mapObjects[n]" );
 	}
 }
 #endif
 
+
+const CSharedObject *CSharedObjectTypeCache::FindSharedObject( const CSharedObject &soIndex ) const
+{
+ int index = FindSharedObjectIndex( soIndex );
+ return m_vecObjects.IsValidIndex( index ) ? m_vecObjects[index] : NULL;
+}
+const CSharedObject *CSharedObjectCache::FindSharedObject( const CSharedObject &soIndex ) const
+{
+ const CSharedObjectTypeCache *cache = FindBaseTypeCache( soIndex.GetTypeID() );
+ return cache ? cache->FindSharedObject( soIndex ) : NULL;
+}
+bool CSharedObjectCache::AddObjectClean( CSharedObject *object )
+{
+ CSharedObjectTypeCache *cache = CreateBaseTypeCache( object->GetTypeID() );
+ return cache->AddObjectClean( object );
+}
 
 }  // namespace GCSDK

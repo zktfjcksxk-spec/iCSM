@@ -1,0 +1,54 @@
+[
+  {
+    "path": "vendor/m3/kisak/external/crypto++-5.61/algebra.cpp",
+    "sha256": "7dcffffce06acced94c5d13ab30e825c8be077edba3faaef1b7a9d020842402f"
+  },
+  {
+    "path": "vendor/m3/kisak/external/crypto++-5.61/eccrypto.cpp",
+    "sha256": "2ec7ba5bf7ee215b5115da61f0a469131e9562a5f6090a682930a3a780c78bdb"
+  },
+  {
+    "path": "vendor/m3/kisak/external/crypto++-5.61/panama.cpp",
+    "sha256": "06602b16fded3705b7518519f9485d2bbdad4b048bf506aac1b2cc1bee052095"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/gclogger.cpp",
+    "sha256": "6a1655da83e029b711e58ce503248eeb0e80d0fa8a323cb262370afac48eb048"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/messagelist.cpp",
+    "sha256": "c8d73a7a80010d0d559376d689f09d1214e364bdca4d83f23e62bd565f101a24"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/msgprotobuf.cpp",
+    "sha256": "65a50b57572557b122b53ab92630f31c130472fa0c0c4a02d6e2fb47daa2020e"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/protobufsharedobject.cpp",
+    "sha256": "aaa204713307bdab325d0772a640bcbcae50b749739c0359c962ef4ae12df9d6"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/sharedobject.cpp",
+    "sha256": "6fd9063e45bb2d5b454e2b471bc6df8d68186cd0aaf39e8f216d0effd3f66b3a"
+  },
+  {
+    "path": "vendor/m3/kisak/gcsdk/sharedobjectcache.cpp",
+    "sha256": "3a295c40440c6351beb93c4c08eaa2d336c0ae5eb648e028802d203fa0f36eb5"
+  },
+  {
+    "path": "vendor/m3/gns/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_connections.cpp",
+    "sha256": "0ab1f4ae9bee99a9bc81260009af77a1bb8ce5e3071be4c74f5ee868478cac65"
+  },
+  {
+    "path": "vendor/m3/gns/src/tier0/cpu.cpp",
+    "sha256": "5949e5102175d0003754cfdaf5d778a86b48bec6490b649fbab2c4050caae76f"
+  },
+  {
+    "path": "vendor/m3/gns/src/steamnetworkingsockets/steamnetworkingsockets_internal.h",
+    "sha256": "3dfb229c9181a76142bfe4e99d4629b1026d7d40b714c79383d4958c43c0e456"
+  },
+  {
+    "path": "vendor/m3/kisak/thirdparty/libpng-1.5.30/pngstruct.h",
+    "sha256": "8837e48991ab76701faba7e32eac12c0cd86bf9f0315946a3a83aa0e10ea57b8"
+  }
+]

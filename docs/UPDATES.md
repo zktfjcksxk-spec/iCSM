@@ -17,7 +17,7 @@ The mobile source, unsigned IPA, matching data package and Ubuntu x86_64 dedicat
 
 **Validation:** Build 200's iPad installation, all 36 ARM64/iOS binary signatures, quick-mode 36 samples with real 5v5 counts, saved recommendation application, cancellation and forced-termination recovery passed. No GPU errors were recorded in the 36 samples. At the tested iPad high preset, detail 50% was the conservative choice; some samples remained below 120 FPS. The twelve-map full mode was not executed. Build 200 has not been installed on iPhone in this update. See [frame-calibration measurements](validation/frame-calibration-200.json).
 
-The resource/shader identity is unchanged from the existing paired data, so existing verified data remain compatible. The repackaged data are validated against the IPA manifest. The full IPA + Data cloud workflow has not been run; Build 149 cloud success does not certify Build 200. Ubuntu deployment/multiplayer runtime validation remains separate from source compilation.
+The resource/shader identity is unchanged from the existing paired data, so existing verified data remain compatible. The repackaged data are validated against the IPA manifest. The full IPA + Data cloud workflow has not been run; Build 149 cloud success does not certify Build 200. Ubuntu full compilation/linking and 17 ELF64 x86_64 images/dependencies passed; deployment/multiplayer runtime validation remains separate.
 
 ---
 
@@ -40,7 +40,7 @@ The resource/shader identity is unchanged from the existing paired data, so exis
 
 **验证范围：** Build200 已安装到 iPad，36个 ARM64/iOS 二进制签名检查通过；三图36组采样均为真实5v5，无 GPU 错误，推荐应用、取消和强制退出恢复通过。本机高画质保守推荐插帧细节50%，部分场景仍低于120帧；未执行十二图完整测试，本轮也未安装到 iPhone。详见[插帧验收记录](validation/frame-calibration-200.json)。
 
-资源／着色器身份未改变，现有已验证数据仍兼容；重打包数据与 IPA 清单匹配。完整 IPA + Data 云流程仍未运行，Build149 云编译成功不能作为 Build200 的证明。Ubuntu 部署与多人联机运行验收独立于源码编译。
+资源／着色器身份未改变，现有已验证数据仍兼容；重打包数据与 IPA 清单匹配。完整 IPA + Data 云流程仍未运行，Build149 云编译成功不能作为 Build200 的证明。Ubuntu 已通过全量编译／链接及17个 ELF64 x86_64 模块依赖检查，部署与多人对局尚未验收。
 
 ---
 

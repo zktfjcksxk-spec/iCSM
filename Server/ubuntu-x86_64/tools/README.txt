@@ -1,4 +1,4 @@
-iCSM Ubuntu x86_64 私人服务端 — 四图竞技、逐玩家库存与公网直连版
+iCSM Build200 Ubuntu x86_64 私人服务端 — 四图竞技、逐玩家库存与公网直连版
 
 目标：Linux x86_64，Ubuntu 22.04 或更新版本。
 CPU需支持CMPXCHG16B（/proc/cpuinfo中的cx16）；虚拟机需要开放此CPU功能。
@@ -60,3 +60,10 @@ Ubuntu 上的实际地图运行、多人加入和稳定性仍需部署后验证�
 不需要修改 sv_lan 或申请 Steam 服务器令牌。客户端先设置 password，再
 用 connect 公网IPv4:端口 加入。详细更新方法见 public-connect-notes.txt。
 此修复已通过编译、ELF 检查与原始客户端连接函数验证，远程实服仍需验收。
+
+Build200 源码更新：
+恢复共用后坐力、BOT武器接管、真实武器击杀图标；同步贴纸属性复制。
+独立源码编译：bash tools/build-server.sh；再用 tools/package_runtime.py
+将重新编译的模块与配套 iCSM-v1.zip 组装成新运行目录。请保留旧服务器
+的个人密码、配置和日志。触屏、手套第一人称画面、MetalFX与插帧测试
+属于客户端功能；服务端不运行图形后端。真实Ubuntu部署与联机需单独验收。

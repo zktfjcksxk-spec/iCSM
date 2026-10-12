@@ -12,6 +12,7 @@ sudo apt-get update
 sudo apt-get install -y clang lld cmake ninja-build python3 libssl-dev libcurl4-openssl-dev libbz2-dev zlib1g-dev
 cd Server/ubuntu-x86_64
 bash tools/build-server.sh
+python3 tools/audit_elf.py
 python3 tools/package_runtime.py --build build --data /path/to/iCSM-v1.zip --output /path/to/iCSM-Server
 cd /path/to/iCSM-Server
 ```
@@ -37,3 +38,8 @@ Do not replace an existing server directory in place: keep its password, setting
 保留荒漠迷城→炼狱小镇→Dust II→殒命大厦的经典竞技轮换，默认10人、64tick。同步后坐力、BOT接管、击杀图标及贴纸属性复制，保留原挑战包与房间密码校验；不接入官方匹配。手套第一人称渲染和插帧属于客户端功能。
 
 请在新目录生成运行包，再迁移原服务器的个人配置；不要直接覆盖旧目录的密码、配置和日志。源码编译验证与真实Ubuntu部署／多人联机验收是不同的项目，发布验收记录会分别注明。
+
+
+Build200 validation: all Linux modules compiled/linked; 17 ELF64 x86_64 images and direct dependencies passed. Real Ubuntu deployment and multiplayer gameplay were not run. The runtime packager includes the same two-Printstream item schema as the client, so private inventory validation can recognize those paints.
+
+Build200 已通过服务端全量编译与链接，17个 ELF64 x86_64 模块及直接依赖校验通过；未做真实 Ubuntu 部署和多人对局。本版运行包生成器同步客户端两款印花集物品定义，保留服务端皮肤校验。

@@ -1,3 +1,4 @@
+#include <set>
 //====== Copyright Valve Corporation, All rights reserved. ====================
 //
 // COmmon stuff used by SteamNetworkingSockets code

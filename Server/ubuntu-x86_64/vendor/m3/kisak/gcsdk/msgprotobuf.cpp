@@ -36,7 +36,7 @@ CThreadMutex CProtoBufMsgBase::s_PoolRegMutex;
 //-----------------------------------------------------------------------------
 // Purpose: Constructor
 //-----------------------------------------------------------------------------
-CProtoBufNetPacket::CProtoBufNetPacket( CNetPacket *pNetPacket, GCProtoBufMsgSrc eMsgSrc, const CSteamID steamID, uint32 nGCDirIndex, MsgType_t msgType )
+CProtoBufNetPacket::CProtoBufNetPacket( CNetPacket *pNetPacket, GCProtoBufMsgSrc eMsgSrc, const CSteamID steamID, uint32 unClientAddr, uint32 nGCDirIndex, MsgType_t msgType )
 	: m_msgType( msgType ), m_steamID( steamID ), m_bIsValid( false )
 {
 #ifdef VALVE_BIG_ENDIAN
@@ -65,6 +65,7 @@ CProtoBufNetPacket::CProtoBufNetPacket( CNetPacket *pNetPacket, GCProtoBufMsgSrc
 			{
 				//make sure to set the steam ID to what steam provided so clients can't spoof it
 				m_pHeader->set_client_steam_id( steamID.ConvertToUint64() );
+				m_pHeader->set_ip( unClientAddr );
 				//and track our original source type and which GC it was first received by
 				m_pHeader->set_gc_dir_index_source( nGCDirIndex );
 				m_pHeader->set_gc_msg_src( eMsgSrc );

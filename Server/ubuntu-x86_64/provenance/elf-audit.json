@@ -1,0 +1,293 @@
+{
+  "modules": [
+    {
+      "file": "dedicated.so",
+      "sha256": "f00b78075f63e5864a92ce170009e2e1db613c41e8bf63e171cbdd88e2668d7f",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libbz2.so.1.0",
+        "libz.so.1",
+        "libcurl.so.4",
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libGameNetworkingSockets.so",
+      "sha256": "9d249f8e26d6dd9891ec0c9aafa77260dfac74e560240d08ddc252e5aa48c953",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libcrypto.so.3",
+        "libz.so.1",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libdatacache.so",
+      "sha256": "c0c058eaeb5d71d1d04891038a8238f6a54ff554fc7341d4c615e591e369bdca",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libengine.so",
+      "sha256": "5c104bd3a9f20e7d053d862f59537b881c1245bd90580dc72cb991b1cc0e7c7c",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libbz2.so.1.0",
+        "libz.so.1",
+        "libcurl.so.4",
+        "libGameNetworkingSockets.so",
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libfilesystem_stdio.so",
+      "sha256": "98861c7dd211076ddfe3e85d43c37ca6b8f4dfdfa999fbafa58c085fed05f3b2",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libmatchmaking_ds.so",
+      "sha256": "2d65204399d1f5c00cbe5bad01803e1d64f54ceda445acabcafbe1610b318bf4",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libz.so.1",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libmaterialsystem.so",
+      "sha256": "92310ec56ee4af8292e2615d4dcb2226b8505e6d593b4c70dcc9bd73856c57fa",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libscenefilecache.so",
+      "sha256": "44fdff8aac732d3dd0cbd71be26b8ad2b3f0dffb1563bb311d7ff868de5fa291",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libserver.so",
+      "sha256": "7bb1bebc04e8d6f6d263c828f0e65a7575463413d52e0c003ff9f30e744d8739",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libz.so.1",
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libshaderapiempty.so",
+      "sha256": "16e93fdda87f190e83d454d4a3e5d66aa7eef77fe6f483bed4a413d0f5f437c8",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libsoundemittersystem.so",
+      "sha256": "0892a804753c6604bc008c49091d439c38aabd9cbcf1f5e8e1b6143e95936ed4",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libstudiorender.so",
+      "sha256": "fe39eab42e1c9b81b7227ecbd2d89d74a714e02cf935e977cb502ca095f658f8",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libtier0.so",
+      "sha256": "8a6a424102a7a3a3afa88a79981f68c437f5fbfa3cb39b29ce3c62b925f2bb18",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libvphysics.so",
+      "sha256": "129af3b5e593cfa06193008c847597b921603e076b6a3ec0e6f0a95af851cf6c",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libvscript.so",
+      "sha256": "057ff18d047590448db22a516ca163188a2cec9fd5c130ec90e24ab9ab9a1148",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libvstdlib.so",
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "libvstdlib.so",
+      "sha256": "ab5258e437a799386068de8a9d76858c0c4c757d5ada9d1cf823370d1b8b40ce",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libtier0.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    },
+    {
+      "file": "csgo_dedicated",
+      "sha256": "f072839004f799d4bcddf3061c5b7d91aff14d6b5dbad6fe94875b912fae6f78",
+      "architecture": "x86_64",
+      "format": "ELF64",
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "missing_direct_dependencies": [],
+      "max_glibc": "GLIBC_2.34"
+    }
+  ],
+  "module_count": 17,
+  "linked_with_no_undefined_symbols": true,
+  "game_executed": false,
+  "dependency_resolution": "Ubuntu 22.04 amd64 development/runtime packages"
+}

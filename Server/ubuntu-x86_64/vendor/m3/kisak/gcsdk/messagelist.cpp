@@ -564,7 +564,7 @@ CMessageList::~CMessageList()
 	{
 		if ( m_vecMessageInfoBuckets[nIndex] != NULL )
 		{
-			FreePv( m_vecMessageInfoBuckets[nIndex] );
+			free( m_vecMessageInfoBuckets[nIndex] );
 			m_vecMessageInfoBuckets[nIndex] = NULL;
 			nUsedBuckets++;
 		}
@@ -601,7 +601,7 @@ void CMessageList::AssureBucket( int nBucket )
 	if ( m_vecMessageInfoBuckets[nBucket] == NULL )
 	{
 		// nope; get one and initialize it
-		m_vecMessageInfoBuckets[nBucket] = (short*) PvAlloc( sizeof(short) * m_kcBucketSize );
+		m_vecMessageInfoBuckets[nBucket] = (short*) malloc( sizeof(short) * m_kcBucketSize );
 		for ( int nIndex = 0; nIndex < m_kcBucketSize; nIndex++)
 			m_vecMessageInfoBuckets[nBucket][nIndex] = -1;
 	}

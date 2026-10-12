@@ -32,5 +32,16 @@
     "missing_explicit_build_inputs": 0
   },
   "cloud_build_200_executed": false,
-  "ubuntu_runtime_tested": false
+  "ubuntu_runtime_tested": false,
+  "ubuntu_server": {
+    "full_compile_and_link_passed": true,
+    "target": "x86_64-linux-gnu",
+    "builder": "Ubuntu22.04 ARM64 cross-builder, Clang14",
+    "modules": 17,
+    "elf_dependencies_passed": true,
+    "runtime_tested": false,
+    "inventory_protocol": 2,
+    "schema_matches_mobile": true,
+    "changed_gameplay_source_units": 7
+  }
 }

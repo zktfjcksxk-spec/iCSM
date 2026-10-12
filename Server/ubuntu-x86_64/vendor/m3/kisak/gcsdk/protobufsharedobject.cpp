@@ -5,7 +5,9 @@
 //=============================================================================
 #include "stdafx.h"
 
+#ifdef GC
 #include "gcsdk_gcmessages.pb.h"
+#endif
 
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/reflection_ops.h"
@@ -383,81 +385,10 @@ bool CProtoBufSharedObjectBase::BIsKeyLess( const CSharedObject & soRHS  ) const
 }
 
 
-void CProtoBufSharedObjectBase::RecursiveAddProtoBufToKV( KeyValues *pKVDest, const ::google::protobuf::Message & msg )
-{
-	using ::google::protobuf::FieldDescriptor;
-	const ::google::protobuf::Descriptor *pDescriptor = msg.GetDescriptor();
-	const ::google::protobuf::Reflection *pReflection = msg.GetReflection();
-	
-	for ( int iField = 0; iField < pDescriptor->field_count(); iField++ )
-	{
-		const ::google::protobuf::FieldDescriptor *pField = pDescriptor->field( iField );
-		const char *pFieldName = pField->name().c_str();
-
-		if ( pField->is_repeated() )
-		{
-			KeyValues *pKVContainer = pKVDest->FindKey( pFieldName, true );
-			for ( int iRepeated = 0; iRepeated < pReflection->FieldSize( msg, pField ); iRepeated++ )
-			{
-				KeyValues *pKVNode = pKVContainer->CreateNewKey();
-				switch ( pField->cpp_type() )
-				{
-				case FieldDescriptor::CPPTYPE_INT32:	pKVNode->SetInt(	NULL, pReflection->GetRepeatedInt32( msg, pField, iRepeated ) );			break;
-				case FieldDescriptor::CPPTYPE_INT64:	pKVNode->SetUint64( NULL, (uint64)pReflection->GetRepeatedInt64( msg, pField, iRepeated ) );	break;
-				case FieldDescriptor::CPPTYPE_UINT32:	pKVNode->SetInt(	NULL, (int32)pReflection->GetRepeatedUInt32( msg, pField, iRepeated ) );	break;
-				case FieldDescriptor::CPPTYPE_UINT64:	pKVNode->SetUint64( NULL, pReflection->GetRepeatedUInt64( msg, pField, iRepeated ) );			break;
-				case FieldDescriptor::CPPTYPE_DOUBLE:	pKVNode->SetFloat(	NULL, (float)pReflection->GetRepeatedDouble( msg, pField, iRepeated ) );	break;
-				case FieldDescriptor::CPPTYPE_FLOAT:	pKVNode->SetFloat(	NULL, pReflection->GetRepeatedFloat( msg, pField, iRepeated ) );			break;
-				case FieldDescriptor::CPPTYPE_BOOL:		pKVNode->SetBool(	NULL, pReflection->GetRepeatedBool( msg, pField, iRepeated ) );				break;
-				case FieldDescriptor::CPPTYPE_ENUM:		pKVNode->SetInt(	NULL, pReflection->GetRepeatedEnum( msg, pField, iRepeated )->number() );	break;
-				case FieldDescriptor::CPPTYPE_STRING:	pKVNode->SetString(	NULL, pReflection->GetRepeatedString( msg, pField, iRepeated ).c_str() );	break;
-				case FieldDescriptor::CPPTYPE_MESSAGE:
-					{
-						const ::google::protobuf::Message &subMsg = pReflection->GetRepeatedMessage( msg, pField, iRepeated );
-						RecursiveAddProtoBufToKV( pKVNode, subMsg );
-						break;
-					}
-				default:
-					AssertMsg1( false, "Unknown cpp_type %d", pField->cpp_type() );
-					break;
-				}
-			}
-		}
-		else
-		{
-			switch ( pField->cpp_type() )
-			{
-			case FieldDescriptor::CPPTYPE_INT32:	pKVDest->SetInt(	pFieldName, pReflection->GetInt32( msg, pField ) );			break;
-			case FieldDescriptor::CPPTYPE_INT64:	pKVDest->SetUint64( pFieldName, (uint64)pReflection->GetInt64( msg, pField ) );	break;
-			case FieldDescriptor::CPPTYPE_UINT32:	pKVDest->SetInt(	pFieldName, (int32)pReflection->GetUInt32( msg, pField ) );	break;
-			case FieldDescriptor::CPPTYPE_UINT64:	pKVDest->SetUint64( pFieldName, pReflection->GetUInt64( msg, pField ) );		break;
-			case FieldDescriptor::CPPTYPE_DOUBLE:	pKVDest->SetFloat(	pFieldName, (float)pReflection->GetDouble( msg, pField ) );	break;
-			case FieldDescriptor::CPPTYPE_FLOAT:	pKVDest->SetFloat(	pFieldName, pReflection->GetFloat( msg, pField ) );			break;
-			case FieldDescriptor::CPPTYPE_BOOL:		pKVDest->SetBool(	pFieldName, pReflection->GetBool( msg, pField ) );			break;
-			case FieldDescriptor::CPPTYPE_ENUM:		pKVDest->SetInt(	pFieldName, pReflection->GetEnum( msg, pField )->number() );break;
-			case FieldDescriptor::CPPTYPE_STRING:	pKVDest->SetString(	pFieldName, pReflection->GetString( msg, pField ).c_str() );break;
-			case FieldDescriptor::CPPTYPE_MESSAGE:
-				{
-					KeyValues *pKVSub = pKVDest->FindKey( pFieldName, true );
-					const ::google::protobuf::Message &subMsg = pReflection->GetMessage( msg, pField );
-					RecursiveAddProtoBufToKV( pKVSub, subMsg );
-					break;
-				}
-			default:
-				AssertMsg1( false, "Unknown cpp_type %d", pField->cpp_type() );
-				break;
-			}
-		}
-	}
-}
 
 
-KeyValues *CProtoBufSharedObjectBase::CreateKVFromProtoBuf( const ::google::protobuf::Message & msg )
-{
-	KeyValues *pKVDest = new KeyValues( msg.GetDescriptor()->name().c_str() );
-	RecursiveAddProtoBufToKV( pKVDest, msg );
-	return pKVDest;
-}
+
+
 
 
 //----------------------------------------------------------------------------
@@ -529,15 +460,7 @@ bool CProtoBufSharedObjectBase::BUpdateFromNetwork( const CSharedObject & objUpd
 //----------------------------------------------------------------------------
 // Purpose: Static help class that seralizes to a buffer
 //----------------------------------------------------------------------------
-bool CProtoBufSharedObjectBase::SerializeToBuffer( const ::google::protobuf::Message & msg, CUtlBuffer & bufOutput )
-{
-	uint32 unSize = msg.ByteSize();
-	bufOutput.Clear();
-	bufOutput.EnsureCapacity( unSize );
-	msg.SerializeWithCachedSizesToArray( (uint8*)bufOutput.Base() );
-	bufOutput.SeekPut( CUtlBuffer::SEEK_HEAD, unSize );
-	return true;
-}
+
 
 //----------------------------------------------------------------------------
 // Purpose: Adds the relevant message bits to create this object to the
@@ -555,12 +478,7 @@ bool CProtoBufSharedObjectBase::BAddToMessage( CUtlBuffer & bufOutput )  const
 // Purpose: Adds the relevant message bits to create this object to the
 //			message. This will be called whenever a subscriber is added.
 //----------------------------------------------------------------------------
-bool CProtoBufSharedObjectBase::BAddToMessage( std::string *pBuffer )  const
-{
-	const ::google::protobuf::Message & msg = *GetPObject();
 
-	return msg.SerializeToString( pBuffer );
-}
 
 //----------------------------------------------------------------------------
 // Purpose: Parses the message bits for creating this object from the message.
@@ -614,22 +532,7 @@ bool CProtoBufSharedObjectBase::BAppendToMessage( std::string *pBuffer ) const
 
 
 //----------------------------------------------------------------------------
-::google::protobuf::Message *CProtoBufSharedObjectBase::BuildDestroyToMessage( const ::google::protobuf::Message & msg )
-{
-	const ::google::protobuf::Descriptor *pDescriptor = msg.GetDescriptor();
-	::google::protobuf::Message *pMessageToSend = msg.New();
 
-	for( int nField = 0; nField < pDescriptor->field_count(); nField++ )
-	{
-		const ::google::protobuf::FieldDescriptor *pFieldDescriptor = pDescriptor->field( nField );
-		if( !IsKeyField( pFieldDescriptor ) )
-			continue;
-
-		CopyProtoBufField( *pMessageToSend, msg, pFieldDescriptor, pFieldDescriptor );
-	}
-
-	return pMessageToSend;
-}
 
 //----------------------------------------------------------------------------
 // Purpose: Adds just the key fields to the message
@@ -648,6 +551,45 @@ bool CProtoBufSharedObjectBase::BAddDestroyToMessage( CUtlBuffer & bufDestroy ) 
 //----------------------------------------------------------------------------
 // Purpose: Adds just the key fields to the message
 //----------------------------------------------------------------------------
+
+
+#endif //GC
+
+// The local 2019 interface exposes serialization on the game side as well.
+bool CProtoBufSharedObjectBase::SerializeToBuffer( const ::google::protobuf::Message & msg, CUtlBuffer & bufOutput )
+{
+	uint32 unSize = msg.ByteSize();
+	bufOutput.Clear();
+	bufOutput.EnsureCapacity( unSize );
+	msg.SerializeWithCachedSizesToArray( (uint8*)bufOutput.Base() );
+	bufOutput.SeekPut( CUtlBuffer::SEEK_HEAD, unSize );
+	return true;
+}
+
+bool CProtoBufSharedObjectBase::BAddToMessage( std::string *pBuffer )  const
+{
+	const ::google::protobuf::Message & msg = *GetPObject();
+
+	return msg.SerializeToString( pBuffer );
+}
+
+::google::protobuf::Message *CProtoBufSharedObjectBase::BuildDestroyToMessage( const ::google::protobuf::Message & msg )
+{
+	const ::google::protobuf::Descriptor *pDescriptor = msg.GetDescriptor();
+	::google::protobuf::Message *pMessageToSend = msg.New();
+
+	for( int nField = 0; nField < pDescriptor->field_count(); nField++ )
+	{
+		const ::google::protobuf::FieldDescriptor *pFieldDescriptor = pDescriptor->field( nField );
+		if( !IsKeyField( pFieldDescriptor ) )
+			continue;
+
+		CopyProtoBufField( *pMessageToSend, msg, pFieldDescriptor, pFieldDescriptor );
+	}
+
+	return pMessageToSend;
+}
+
 bool CProtoBufSharedObjectBase::BAddDestroyToMessage( std::string *pBuffer ) const
 {
 	const ::google::protobuf::Message & msg = *GetPObject();
@@ -657,8 +599,6 @@ bool CProtoBufSharedObjectBase::BAddDestroyToMessage( std::string *pBuffer ) con
 	delete pMessageToSend;
 	return true;
 }
-
-#endif //GC
 
 //----------------------------------------------------------------------------
 // Purpose: Copy the data from the specified schema shared object into this. 

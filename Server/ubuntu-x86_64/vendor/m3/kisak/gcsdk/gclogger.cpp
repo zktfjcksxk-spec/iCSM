@@ -155,20 +155,9 @@ void CGCEmitGroup::VerboseV( const char *pchMsg, va_list vaArgs ) const
 //------------------------------
 // Verbose
 
-void CGCEmitGroup::Internal_BoldMsg( const char *pchMsg, ... ) const
-{
-	va_list args;
-	va_start( args, pchMsg );
-	BoldMsgV( pchMsg, args );
-	va_end( args );
-}
 
-void CGCEmitGroup::BoldMsgV( const char *pchMsg, va_list vaArgs ) const
-{
-	// !FIXME! DOTAMERGE
-	//EmitBaseMessageV( *this, SPEW_BOLD_MESSAGE, 1, 1, pchMsg, vaArgs );
-	EmitBaseMessageV( *this, SPEW_MESSAGE, 1, 1, pchMsg, vaArgs );
-}
+
+
 
 
 //------------------------------

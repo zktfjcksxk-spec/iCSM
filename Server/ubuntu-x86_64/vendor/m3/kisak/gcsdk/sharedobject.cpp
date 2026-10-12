@@ -4,7 +4,9 @@
 //
 //=============================================================================
 #include "stdafx.h"
+#ifdef GC
 #include "gcsdk_gcmessages.pb.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -15,7 +17,13 @@ namespace GCSDK
 //----------------------------------------------------------------------------
 // Purpose: Map of all the factory functions for all CSharedObject classes
 //----------------------------------------------------------------------------
-	CUtlMap<int, CSharedObject::SharedObjectInfo_t> CSharedObject::sm_mapFactories(DefLessFunc(int));
+	CSharedObject::TVecFactories CSharedObject::sm_vecFactories;
+
+const CSharedObject::SharedObjectInfo_t *CSharedObject::FindSharedObjectInfo( int nTypeID )
+{
+	int index = sm_vecFactories.Find( nTypeID );
+	return sm_vecFactories.IsValidIndex( index ) ? &sm_vecFactories[index] : NULL;
+}
 
 
 //----------------------------------------------------------------------------
@@ -24,13 +32,16 @@ namespace GCSDK
 void CSharedObject::RegisterFactory( int nTypeID, SOCreationFunc_t fnFactory, uint32 unFlags, const char *pchClassName, const char* pszBuildCacheName, const char* pszCreateName, const char* pszUpdateName )
 {
 	SharedObjectInfo_t info;
+	info.m_nID = nTypeID;
 	info.m_pFactoryFunction = fnFactory;
 	info.m_unFlags = unFlags;
 	info.m_pchClassName = pchClassName;
-	info.m_sBuildCacheSubNodeName.Format( "BuildCacheSubscribed(%s)", pchClassName );
-	info.m_sCreateNodeName.Format( "Create(%s)", pchClassName );
-	info.m_sUpdateNodeName.Format( "Update(%s)", pchClassName );
-	sm_mapFactories.InsertOrReplace( nTypeID, info );
+	info.m_pchBuildCacheSubNodeName = pszBuildCacheName;
+	info.m_pchCreateNodeName = pszCreateName;
+	info.m_pchUpdateNodeName = pszUpdateName;
+	int index = sm_vecFactories.Find( nTypeID );
+	if ( sm_vecFactories.IsValidIndex( index ) ) sm_vecFactories.Remove( index );
+	sm_vecFactories.Insert( info );
 
 	//register this class with our SO stats as well
 	#ifdef GC
@@ -44,11 +55,11 @@ void CSharedObject::RegisterFactory( int nTypeID, SOCreationFunc_t fnFactory, ui
 //----------------------------------------------------------------------------
 CSharedObject *CSharedObject::Create( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	AssertMsg1( sm_mapFactories.IsValidIndex( nIndex ), "Probably failed to set object type (%d) on the server/client.\n", nTypeID );
-	if( sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	AssertMsg1( sm_vecFactories.IsValidIndex( nIndex ), "Probably failed to set object type (%d) on the server/client.\n", nTypeID );
+	if( sm_vecFactories.IsValidIndex( nIndex ) ) 
 	{
-		return sm_mapFactories[nIndex].m_pFactoryFunction();
+		return sm_vecFactories[nIndex].m_pFactoryFunction();
 	}
 	else
 	{
@@ -61,48 +72,48 @@ CSharedObject *CSharedObject::Create( int nTypeID )
 //----------------------------------------------------------------------------
 uint32 CSharedObject::GetTypeFlags( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	if( !sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	if( !sm_vecFactories.IsValidIndex( nIndex ) ) 
 		return 0;
 	else
-		return sm_mapFactories[nIndex].m_unFlags;
+		return sm_vecFactories[nIndex].m_unFlags;
 }
 
 const char *CSharedObject::PchClassName( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	if( !sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	if( !sm_vecFactories.IsValidIndex( nIndex ) ) 
 		return 0;
 	else
-		return sm_mapFactories[nIndex].m_pchClassName;
+		return sm_vecFactories[nIndex].m_pchClassName;
 
 }
 
 const char *CSharedObject::PchClassBuildCacheNodeName( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	if( !sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	if( !sm_vecFactories.IsValidIndex( nIndex ) ) 
 		return 0;
 	else
-		return sm_mapFactories[nIndex].m_sBuildCacheSubNodeName.Get();
+		return sm_vecFactories[nIndex].m_pchBuildCacheSubNodeName;
 }
 
 const char *CSharedObject::PchClassCreateNodeName( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	if( !sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	if( !sm_vecFactories.IsValidIndex( nIndex ) ) 
 		return 0;
 	else
-		return sm_mapFactories[nIndex].m_sCreateNodeName.Get();
+		return sm_vecFactories[nIndex].m_pchCreateNodeName;
 }
 
 const char *CSharedObject::PchClassUpdateNodeName( int nTypeID )
 {
-	int nIndex = sm_mapFactories.Find( nTypeID );
-	if( !sm_mapFactories.IsValidIndex( nIndex ) ) 
+	int nIndex = sm_vecFactories.Find( nTypeID );
+	if( !sm_vecFactories.IsValidIndex( nIndex ) ) 
 		return 0;
 	else
-		return sm_mapFactories[nIndex].m_sUpdateNodeName.Get();
+		return sm_vecFactories[nIndex].m_pchUpdateNodeName;
 }
 
 
@@ -548,7 +559,7 @@ void CSharedObject::Validate( CValidator &validator, const char *pchName )
 void CSharedObject::ValidateStatics( CValidator & validator )
 {
 	CValidateAutoPushPop validatorAutoPushPop( validator, NULL, "CSharedObject::ValidateStatics", "CSharedObject::ValidateStatics" );	
-	ValidateObj( sm_mapFactories );
+	ValidateObj( sm_vecFactories );
 }
 
 #endif

@@ -21,6 +21,13 @@ with zipfile.ZipFile(a.data) as z:
     target=root/(new+item.filename[len(old):]);target.parent.mkdir(parents=True,exist_ok=True)
     with z.open(item) as src,target.open('wb') as dst:shutil.copyfileobj(src,dst,1024*1024)
     break
+# Match the client's validated Printstream schema. The headless server needs
+# item/paint definitions and alternate icons, but no client textures or UI.
+overrides=tools/'data-overrides'
+if overrides.is_dir():
+ for f in overrides.rglob('*'):
+  if f.is_file():
+   target=root/'csgo'/f.relative_to(overrides);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(f,target)
 for name in ('start-server.sh','check-server.sh','run_server.py','README.txt','public-connect-notes.txt'):shutil.copy2(tools/name,root/name)
 for name,dest in [('gamemodes_server.txt','gamemodes_server.txt'),('mapcycle_icsm.txt','mapcycle_icsm.txt'),('icsm_rotation.cfg','cfg/icsm_rotation.cfg')]:shutil.copy2(tools/name,root/'csgo'/dest)
 (root/'csgo/gameinfo.txt').write_text('''"GameInfo" { game "iCSM Private Server" type multiplayer_only bots 1 FileSystem { SteamAppId 730 SearchPaths { Game |gameinfo_path|. Game |gameinfo_path|../content/csgo Game |gameinfo_path|../platform Platform |gameinfo_path|../platform Mod |gameinfo_path|. } } }\n''')
