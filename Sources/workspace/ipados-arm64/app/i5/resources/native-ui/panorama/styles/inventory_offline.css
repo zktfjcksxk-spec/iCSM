@@ -1,20 +1,21 @@
 /* Source is a working fallback and the authoritative event/data host. */
-.offline-inventory { flow-children: down; background-color: #ffffff02; padding: 16px 24px; }
+.offline-inventory.mainmenu-content__container { flow-children: down; background-color: rgba(0, 0, 0, 0.90); border: 0px solid transparent; border-radius: 0px; padding: 16px 24px; overflow: clip clip; }
 /* Keep JsInventory's opacity transition intact: MainMenu uses its transition
    end to mark the page visible/ready. Hide only the Source presentation. */
 .offline-inventory-source-content { width: 100%; height: 100%; flow-children: down; }
-.icsm-native-inventory { background-color: transparent; }
+/* Retain the same single dark page tint as play/settings beneath UIKit. */
+.icsm-native-inventory { background-color: rgba(0, 0, 0, 0.90); }
 .icsm-native-inventory .offline-inventory-source-content { opacity: 0; transition-duration: 0s; }
 .offline-inventory-header { width: 100%; height: 76px; }
-#OfflineInventoryTitle { horizontal-align: center; vertical-align: center; color: white; font-size: 32px; font-weight: bold; }
-.offline-inventory-filter-left, .offline-inventory-filter-right { flow-children: right; vertical-align: center; }
-.offline-inventory-filter-right { horizontal-align: right; }
-.offline-inventory-header Button, .offline-skin-teams Button { width: 116px; height: 52px; margin: 0px 4px; border-radius: 22px; background-color: #ffffff16; border: 1px solid #ffffff30; }
+#OfflineInventoryTitle { visibility: collapse; horizontal-align: center; vertical-align: center; color: white; font-size: 32px; font-weight: bold; }
+.offline-inventory-filters { width: 100%; flow-children: right; vertical-align: center; }
+.offline-inventory-header .offline-inventory-filters Button { width: fill-parent-flow(1); }
+.offline-inventory-header Button, .offline-skin-teams Button { width: 116px; height: 52px; margin: 0px 4px; border-radius: 12px; background-color: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
 .offline-inventory-header Label, .offline-skin-teams Label { color: white; font-size: 23px; horizontal-align: center; vertical-align: center; }
-.offline-inventory-header Button.equipped { background-color: #ffffff35; }
+.offline-inventory-header Button.equipped { background-color: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); }
 .offline-inventory-hint { margin: 12px 0px; font-size: 20px; color: #ffffffbb; }
 .offline-inventory-items { width: 100%; height: fill-parent-flow(1); flow-children: right-wrap; overflow: squish scroll; }
-.offline-inventory-card { width: 248px; height: 180px; margin: 0px 14px 14px 0px; padding: 10px; flow-children: down; border-radius: 24px; background-color: #ffffff12; border: 1px solid #ffffff30; }
+.offline-inventory-card { width: 248px; height: 180px; margin: 0px 14px 14px 0px; padding: 10px; flow-children: down; border-radius: 12px; background-color: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
 .offline-inventory-card.offline-knife-card { width: 47%; margin: 0px 1.5% 14px 1.5%; }
 .skin-team-locked .offline-skin-teams { visibility: collapse; }
 .offline-inventory-image { width: 224px; height: 110px; horizontal-align: center; }
@@ -25,7 +26,8 @@
 .offline-inventory-back { visibility: collapse; horizontal-align: left; }
 .offline-skin-page { visibility: collapse; width: 100%; height: fill-parent-flow(1); flow-children: down; }
 .skins-page .offline-inventory-back, .skins-page .offline-skin-page { visibility: visible; }
-.skins-page .offline-inventory-filter-left, .skins-page .offline-inventory-filter-right, .skins-page #OfflineInventoryHint, .skins-page #OfflineInventoryItems { visibility: collapse; }
+.skins-page .offline-inventory-filters, .skins-page #OfflineInventoryHint, .skins-page #OfflineInventoryItems { visibility: collapse; }
+.skins-page #OfflineInventoryTitle { visibility: visible; }
 .offline-skin-header { width: 100%; flow-children: right; }
 #OfflineSkinWeaponImage { width: 220px; height: 130px; margin-right: 28px; }
 .offline-skin-details { flow-children: down; vertical-align: center; }
@@ -33,13 +35,14 @@
 #OfflineSkinSelectionName { font-size: 24px; margin-top: 8px; }
 .offline-skin-teams { flow-children: right; margin-top: 10px; }
 .offline-skin-choices { width: 100%; height: fill-parent-flow(1); flow-children: right-wrap; overflow: squish scroll; }
-.offline-skin-card { width: 250px; height: 190px; padding: 12px; margin: 0px 14px 14px 0px; flow-children: down; border-radius: 24px; background-color: #ffffff12; border: 1px solid #ffffff30; }
+.offline-skin-card { width: 250px; height: 190px; padding: 12px; margin: 0px 14px 14px 0px; flow-children: down; border-radius: 12px; background-color: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
 .offline-skin-image { width: 224px; height: 110px; horizontal-align: center; }
 .offline-skin-name { width: 100%; color: white; font-size: 23px; text-align: center; height: 32px; text-overflow: shrink; }
-.offline-skin-card.equipped { border-color: white; background-color: #ffffff25; }
+.offline-skin-card.equipped { border-color: rgba(255,255,255,0.5); background-color: rgba(255,255,255,0.18); }
 .offline-skin-footer { width: 100%; height: 76px; margin-top: 12px; }
 .offline-skin-pagination { flow-children: right; vertical-align: center; }
-.offline-skin-pagination Button, .offline-skin-confirm { padding: 12px 20px; height: 64px; border-radius: 24px; background-color: #ffffff20; border: 1px solid #ffffff40; }
+.offline-skin-pagination Button, .offline-skin-confirm { padding: 12px 20px; height: 64px; border-radius: 12px; background-color: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
+.offline-skin-confirm { background-color: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.30); }
 .offline-skin-pagination Button:disabled { opacity: 0.35; }
 .offline-skin-pagination Label, .offline-skin-confirm Label { font-size: 24px; color: white; vertical-align: center; horizontal-align: center; }
 #OfflineSkinPageNumber { margin: 0px 20px; }

@@ -1,0 +1,57 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// STATIC: "FLASHLIGHTDEPTHFILTERMODE"	"0..2"	
+
+#include "common_fog_ps_supportsvertexfog_fxc.h"
+#include "shader_constant_register_map.h"
+#include "common_flashlight_fxc.h"
+#include "common_vertexlitgeneric_dx9.h"
+
+const float4 g_ShadowTweaks						: register( c2 );
+const float4 g_ShadowColorTweaks				: register( c3 );
+
+const float4 g_EyePos_BaseTextureTranslucency	: register( c20 );
+const float4 g_FogParams						: register( c21 );
+
+const float4 g_FlashlightAttenuationFactors	    : register( c22 );
+const float3 g_FlashlightPos					: register( c23 );
+const float4x4 g_FlashlightWorldToTexture		: register( c24 ); // through c27
+
+sampler RandRotSampler							: register( s6 );  // RandomRotation sampler
+sampler FlashlightSampler						: register( s7 );
+sampler ShadowDepthSampler						: register( s8 );  // Flashlight shadow depth map sampler
+
+
+struct PS_INPUT
+{
+	// Stuff that isn't seen by the pixel shader
+	float4 projPos										: POSITION;	
+
+	// Stuff that is seen by the pixel shader
+	float4 vWorldNormal									: TEXCOORD0;
+	float4 color  										: TEXCOORD1;	
+	float4 vProjPos										: TEXCOORD2;	
+	float4 vWorldPos									: TEXCOORD3;
+	float4 flashlightSpacePos							: TEXCOORD4;
+};
+
+float4_color_return_type main( PS_INPUT i ) : COLOR
+{
+	float3 diffuseLighting = i.color.rgb;
+
+	int nShadowSampleLevel = FLASHLIGHTDEPTHFILTERMODE;
+
+	float flashlightShadow = DoFlashlightShadow( ShadowDepthSampler, RandRotSampler, i.flashlightSpacePos.xyz / i.flashlightSpacePos.w, float2( 0.0f, 0.0f ), nShadowSampleLevel, g_ShadowTweaks, 1.0f );
+
+	float4 result;
+	
+	result.rgb = diffuseLighting * g_ShadowColorTweaks.x;
+	result.a = lerp( 0.0f, g_ShadowColorTweaks.y, 1.0f - flashlightShadow );
+
+	float fogFactor = CalcPixelFogFactorSupportsVertexFog( PIXELFOGTYPE, g_FogParams, g_EyePos_BaseTextureTranslucency.xyz, i.vWorldPos.xyz, i.vProjPos.z, 0.0f );
+
+	float4_color_return_type vOutput = FinalOutputHalf( result, fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, false, i.vProjPos.z );
+
+	return vOutput;
+}
+

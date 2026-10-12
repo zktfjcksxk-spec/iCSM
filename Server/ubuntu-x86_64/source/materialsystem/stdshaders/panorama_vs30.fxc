@@ -1,0 +1,37 @@
+#include "common_vs_fxc.h"
+
+struct VS_INPUT
+{
+	float4 vPosition : POSITION;
+	float4 vTex : TEXCOORD0;
+	float4 vTex1 : TEXCOORD1;
+	float4 vColor : TEXCOORD2;
+};
+
+struct VS_OUTPUT
+{
+	float4 vPosition : POSITION;
+	float4 vTex : TEXCOORD0;
+	float4 vTex1 : TEXCOORD1;
+	float4 vColor : TEXCOORD2;
+};
+
+VS_OUTPUT main( const VS_INPUT i )
+{
+	VS_OUTPUT o;
+
+	o.vPosition = i.vPosition;
+	o.vTex = i.vTex;
+	o.vTex1 = i.vTex1;
+	o.vColor = i.vColor;
+
+	return o;
+}
+
+
+
+
+
+
+
+

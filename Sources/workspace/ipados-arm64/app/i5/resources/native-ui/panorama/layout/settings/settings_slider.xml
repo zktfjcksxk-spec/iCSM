@@ -5,10 +5,12 @@
         <include src="file://{resources}/styles/settings/settings_slider_mobile.css" />
     </styles>
     <CSGOSettingsSlider>
-        <Panel id="ICSMSettingsSliderRow" class="left-right-flow vertical-center full-width">
-            <Label id="Title" style="width: 60%; font-size: 22px; color: white; vertical-align: center;" />
-            <Slider class="HorizontalSlider" direction="horizontal" id="Slider" />
-            <TextEntry maxchars="4" textmode="numeric" id="Value" />
+        <Panel id="ICSMSettingsSliderRow" class="top-bottom-flow full-width">
+            <Label id="Title" />
+            <Panel id="ICSMSettingsSliderInputRow">
+                <Slider class="HorizontalSlider" direction="horizontal" id="Slider" />
+                <TextEntry maxchars="8" textmode="numeric" id="Value" />
+            </Panel>
         </Panel>
     </CSGOSettingsSlider>
 </root>

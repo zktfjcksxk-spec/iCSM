@@ -10,6 +10,7 @@
 
 static uint64_t shaderCacheDataLoads=0,shaderCacheSourceCompiles=0;
 static uint64_t shaderCacheFallbacks=0,shaderCacheLibraryCount=0;
+static uint64_t shaderCacheReleasedTextBytes=0,shaderCacheCompactedShaders=0;
 static NSDictionary *shaderCacheFileSnapshot=@{};
 
 static id<MTLLibrary> loadShaderLibraryData(NSString *path,NSError **error) {
@@ -46,7 +47,8 @@ static id<MTLLibrary> loadShaderLibraryData(NSString *path,NSError **error) {
 extern "C" __attribute__((visibility("default"))) NSDictionary *SourceMetalShaderCacheSnapshot() {
     return @{@"loader":@"closed-file / dispatch-data",@"offline_data_loads":@(shaderCacheDataLoads),
              @"source_compiles":@(shaderCacheSourceCompiles),@"cache_fallbacks":@(shaderCacheFallbacks),
-             @"retained_libraries":@(shaderCacheLibraryCount),@"file_snapshot":shaderCacheFileSnapshot};
+             @"retained_libraries":@(shaderCacheLibraryCount),@"file_snapshot":shaderCacheFileSnapshot,
+             @"compacted_shaders":@(shaderCacheCompactedShaders),@"compiler_text_bytes_released":@(shaderCacheReleasedTextBytes)};
 }
 
 CON_COMMAND(icsm_metal_cache_stats,"Print shader cache loads and a one-shot open-file count") {

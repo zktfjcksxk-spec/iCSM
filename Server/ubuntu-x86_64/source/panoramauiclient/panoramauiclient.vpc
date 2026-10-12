@@ -1,0 +1,123 @@
+//-----------------------------------------------------------------------------
+//	panoramauiclient.dll project script
+//-----------------------------------------------------------------------------
+
+$macro SRCDIR		".."
+$macro OUTBINDIR	"$SRCDIR\..\game\bin"
+
+
+$Macro GENERATED_PROTO_DIR	"generated_proto_panorama"
+
+$include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+$include "$SRCDIR\vpc_scripts\protobuf_builder.vpc"
+
+$Conditional "SPLIT_PANORAMA_TEXT" "1"
+
+$Macro PANORAMA_USE_S1WRAPPER "1"
+
+
+$Configuration
+{
+	$Compiler
+	{
+		$PreprocessorDefinitions	"$BASE;SOURCE2_PANORAMA;SOURCE2_PANORAMA_FIXME"
+		$PreprocessorDefinitions				"$BASE;PANORAMA_USE_S1WRAPPER"
+
+		$AdditionalIncludeDirectories			"steamextra\common;steamextra\public;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper\thirdparty\pango;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper;$BASE"
+//		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;$SRCDIR\panorama"
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+		$AdditionalIncludeDirectories			"$BASE;..\public\panorama"
+		$AdditionalIncludeDirectories			"$BASE;..\public"
+		$AdditionalIncludeDirectories			"$BASE;..\public\tier1"
+		$AdditionalIncludeDirectories			"$BASE;..\public\vstdlib"
+		$AdditionalIncludeDirectories			"$BASE;..\panorama_s1wrapper\thirdparty\pango\freetype" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;..\external\$CRYPTOPP"
+		$AdditionalIncludeDirectories			"$BASE;..\public\steam"
+		$AdditionalIncludeDirectories			"$BASE;..\common\steamui"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\zlib"
+		$AdditionalIncludeDirectories			"$BASE;..\panorama_s1wrapper\thirdparty\pango\glib" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;..\external\openssl-1.0.1e\steaminc"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\sdl\include"
+
+
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+
+
+    }
+
+	$Linker
+	{
+		$AdditionalDependencies			"$BASE shlwapi.lib" [$WINDOWS]
+	}
+
+}
+
+$Project "panoramauiclient"
+{
+	$Folder "Source Files"
+	{
+		$File	"panoramauiclient.cpp"
+		$file "$SRCDIR/panorama_s1wrapper/utlstringbuilder.cpp"
+		$file "$SRCDIR/thirdparty/JSON_parser/JSON_parser.c"
+		$file "$SRCDIR\panorama_s1wrapper\wrap_misc.cpp"
+		{
+			$Configuration
+			{
+				$Compiler 
+				{
+					$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+				}
+			}
+		}
+
+
+	}
+
+	$Folder	"Header Files"
+	{
+		$File	"panoramauiclient.h"
+	}
+
+	$Folder	"Link Libraries"
+	{
+		$LibExternal	libprotobuf [!$VS2013 && !$VS2015]
+		$Libexternal	$LIBPUBLIC\2013\libprotobuf [$VS2013]
+		$Libexternal	$LIBPUBLIC\2015\libprotobuf [$VS2015]
+		{
+			$Configuration "Debug" { $ExcludedFromBuild "Yes" }
+		}
+
+		$Libexternal	$LIBPUBLIC\2015\debug\libprotobuf [$VS2015]
+		{
+			$Configuration "Release" { $ExcludedFromBuild "Yes" }
+		}
+
+
+		$Lib	"tier2"
+		$Lib	"tier3"
+		$Lib	"mathlib"
+
+		//$Lib	"libprotobuf"           		[$POSIX]
+		$ImplibExternal	steam_api				[ ( $WIN32 || $POSIX || $PS3 ) && !$NO_STEAM ]
+		$ImplibExternal	steam_api64				[ $WIN64 && !$NO_STEAM ]
+		$Lib	"$LIBPUBLIC\panorama_client"
+		$ImpLibExternal	"$SRCDIR\lib\common\$PLATFORM\video"				[!$WIN64]
+		$Lib	"$LIBCOMMON\video64"			[$WIN64]
+		
+		$File "$SRCDIR\lib\common\$PLATFORM\v8.lib" [$WINDOWS && !$VS2015]
+		$File "$SRCDIR\lib\common\$PLATFORM\2015\v8.dll.lib" [$WINDOWS && $VS2015]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8.dylib"	[$OSXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8.so"	[$LINUXALL]
+
+		$Lib	"$LIBCOMMON\$PLATFORM\pcre" 				[$WINDOWS&&!$VS2015]
+		$Lib	"$LIBCOMMON\$PLATFORM\2015\pcre" 			[$WINDOWS&&$VS2015]
+		$Lib	"$LIBCOMMON\$PLATFORM\pcrecpp" 			[$WINDOWS]
+		$LibExternal	"$LIBCOMMON\libpcre" 			[$POSIX]
+		$LibExternal	"$LIBCOMMON\libpcreposix" 		[$POSIX]
+		$LibExternal	"$LIBCOMMON\libpcrecpp" 		[$POSIX]
+	}
+}

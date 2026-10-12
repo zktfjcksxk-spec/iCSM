@@ -137,6 +137,21 @@ typedef struct SourceTouchSettingsState {
 } SourceTouchSettingsState;
 SOURCE_TOUCH_API void SourceTouchSetSettingsScrollCallback(void (*scroll)(const char *, float));
 SOURCE_TOUCH_API void SourceTouchUpdateSettings(const SourceTouchSettingsState *state);
+/* Separate extension: preserve the existing settings/gameplay snapshot ABI.
+   UIKit sends normalized positions to the original Source slider, which owns
+   range mapping, inversion, ConVar changes and the displayed numeric value. */
+typedef struct SourceTouchSettingsSlider {
+    SourceTouchRect hit_bounds, track_bounds;
+    float thumb_width, fraction;
+    char convar[64];
+} SourceTouchSettingsSlider;
+typedef struct SourceTouchSettingsSliderTargets {
+    uint32_t struct_size, count;
+    SourceTouchSettingsSlider sliders[SOURCE_SETTINGS_SLIDER_LIMIT];
+} SourceTouchSettingsSliderTargets;
+SOURCE_TOUCH_API void SourceTouchSetSettingsSliderCallback(void (*change)(const char *, const char *, float, bool));
+SOURCE_TOUCH_API void SourceTouchUpdateSettingsSliderTargets(const SourceTouchSettingsSliderTargets *targets);
+SOURCE_TOUCH_API bool SourceTouchSettingsSliderSet(const char *convar, float fraction, bool finished);
 /* Bounded local validation, without synthesising UIKit touches. */
 SOURCE_TOUCH_API bool SourceTouchSettingsScrollTo(float pixels, bool animated);
 SOURCE_TOUCH_API size_t SourceTouchSettingsScrollSelfTestJSON(char *buffer, size_t capacity);
@@ -155,10 +170,20 @@ SOURCE_TOUCH_API void SourceTouchShutdown(void);
 /* Opens the main-thread UIKit editor; saved coordinates are view fractions. */
 SOURCE_TOUCH_API void SourceTouchOpenLayoutEditor(void);
 SOURCE_TOUCH_API bool SourceTouchIsEditing(void);
+/* Local editor validation uses the same add/map/delete/save UI actions. */
+SOURCE_TOUCH_API bool SourceTouchLayoutEditorAction(const char *action,int scancode);
+SOURCE_TOUCH_API bool SourceTouchKeyboardTestEdge(int scancode,bool pressed);
 SOURCE_TOUCH_API void SourceTouchEditPlayerName(const char *current, void (*completion)(const char *));
 SOURCE_TOUCH_API void SourceTouchExportErrorLogs(void);
 SOURCE_TOUCH_API void SourceTouchOpenRoomBrowser(void (*completion)(const char *, const char *));
+SOURCE_TOUCH_API void SourceTouchOpenFrameCalibration(void (*queue)(const char *), size_t (*scene)(char *,size_t),const char *action);
+SOURCE_TOUCH_API void SourceTouchFrameCalibrationTick();
+SOURCE_TOUCH_API void SourceTouchFrameCalibrationRecover(void (*queue)(const char *),size_t (*scene)(char *,size_t));
+SOURCE_TOUCH_API void SourceTouchFrameCalibrationShutdown();
+SOURCE_TOUCH_API void SourceTouchFrameCalibrationRestoreCommitted();
 SOURCE_TOUCH_API bool SourceTouchSessionActive(void);
+/* Synchronous bounded BGRA encode; filename is validated, pixels are not retained. */
+SOURCE_TOUCH_API bool SourceTouchSaveInventoryPreview(const char *filename,const void *bgra,int width,int height);
 /* Native console presentation retains Source's command and history host. */
 SOURCE_TOUCH_API void SourceTouchConsoleSetVisible(bool visible);
 SOURCE_TOUCH_API bool SourceTouchConsoleIsVisible(void);
@@ -177,6 +202,15 @@ SOURCE_TOUCH_API void SourceTouchConsoleSetInputText(const char *text);
 /* SDL MFi enumeration filters this one framework-created controller only. */
 SOURCE_TOUCH_API bool SourceTouchOwnsGameController(void *game_controller);
 SOURCE_TOUCH_API void SourceTouchSetCallbacks(const SourceTouchCallbacks *callbacks, void *user);
+/* Optional timed look consumer. Uses the same user pointer and replaces look,
+   keeping the original callback/state struct ABI unchanged. Interval is the
+   actual UIKit sample's timestamp minus this look owner's previous sample. */
+typedef void (*SourceTouchLookSampleCallback)(void *user, float dx_points, float dy_points,
+                                             double timestamp, double sample_interval);
+SOURCE_TOUCH_API void SourceTouchSetLookSampleCallback(SourceTouchLookSampleCallback callback);
+/* Hide gameplay buttons and their hit targets; retain swipe and menu input.
+   Separate extension keeps the existing gameplay snapshot ABI unchanged. */
+SOURCE_TOUCH_API void SourceTouchSetButtonsHidden(bool hidden);
 SOURCE_TOUCH_API void SourceTouchUpdateState(const SourceTouchState *state);
 /* Main-thread attach from SDL_uikitview setSDLWindow. NULL is ignored because
    an older replaced view may detach after the new Metal view attaches. */

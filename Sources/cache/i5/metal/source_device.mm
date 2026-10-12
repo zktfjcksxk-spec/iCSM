@@ -18,6 +18,8 @@ extern Device *g_sourceNativeDevice;
 static void afterPresentCapture(Device &d);
 #include "resolution_audit.inc"
 #include "metal_perf_ios.inc"
+#include "clear_color_policy.h"
+#include "texture_lock_trace_ios.inc"
 #include "world_sampler_quality_ios.inc"
 #include "metal_combat_ios.h"
 #include "pipeline_warm_ios.h"
@@ -29,7 +31,8 @@ namespace SourceMetal {
 static MTLRenderPassDescriptor *sourcePass=nil;
 static Device *sourcePassOwner=nullptr;
 static bool sourcePassBindingsDirty=false;
-void passEnded() {sourcePass=nil;sourcePassOwner=nullptr;sourcePassBindingsDirty=false;}
+#include "pass_descriptor_ios.inc"
+void passEnded() {releaseSourcePassResources(sourcePass);sourcePass=nil;sourcePassOwner=nullptr;sourcePassBindingsDirty=false;}
 }
 
 COpenGLEntryPoints *ToGLConnectLibraries(CreateInterfaceFn factory) {
@@ -72,7 +75,7 @@ HRESULT IDirect3DDevice9::CreateTexture(UINT w,UINT h,UINT levels,DWORD usage,D3
 }
 IDirect3DTexture9::~IDirect3DTexture9() {}
 HRESULT IDirect3DTexture9::LockRect(UINT mip,D3DLOCKED_RECT *out,const RECT *rect,DWORD flags) {
-    if(!lightmapShadowLock(native<Image>(this),mip,0))commit(native<Device>(m_device),true);
+    if(!lightmapShadowLock(native<Image>(this),mip,0)){traceTextureWait("texture",native<Image>(this),mip,flags);commit(native<Device>(m_device),true);}
     D3DBOX box; if(rect)box={static_cast<UINT>(rect->left),static_cast<UINT>(rect->top),static_cast<UINT>(rect->right),static_cast<UINT>(rect->bottom),0,1};
     D3DLOCKED_BOX lock; auto hr=lockImage(native<Image>(this),mip,0,rect ? &box:nullptr,flags,lock);
     if(hr==S_OK) { out->pBits=lock.pBits; out->Pitch=lock.RowPitch; } return hr;
@@ -109,7 +112,7 @@ HRESULT IDirect3DVolumeTexture9::GetLevelDesc(UINT mip,D3DVOLUME_DESC *out) { if
 IDirect3DSurface9::~IDirect3DSurface9() { m_device->ReleasedSurface(this); delete static_cast<Object*>(m_native); }
 HRESULT IDirect3DSurface9::GetDesc(D3DSURFACE_DESC *out) { *out=m_desc; return S_OK; }
 HRESULT IDirect3DSurface9::LockRect(D3DLOCKED_RECT *out,const RECT *rect,DWORD flags) {
-    if(!lightmapShadowLock(native<Image>(this),m_mip,m_face))commit(native<Device>(m_device),true);
+    if(!lightmapShadowLock(native<Image>(this),m_mip,m_face)){traceTextureWait("surface",native<Image>(this),m_mip,flags);commit(native<Device>(m_device),true);}
     D3DBOX box; if(rect)box={static_cast<UINT>(rect->left),static_cast<UINT>(rect->top),static_cast<UINT>(rect->right),static_cast<UINT>(rect->bottom),0,1};
     D3DLOCKED_BOX lock; auto hr=lockImage(native<Image>(this),m_mip,m_face,rect ? &box:nullptr,flags,lock);
     if(hr==S_OK) { out->pBits=lock.pBits; out->Pitch=lock.RowPitch; } return hr;
@@ -214,14 +217,14 @@ HRESULT IDirect3DDevice9::SetVertexDeclarationNonInline(IDirect3DVertexDeclarati
 HRESULT IDirect3DDevice9::CreateVertexShader(const DWORD *code,IDirect3DVertexShader9 **out,const char *name,char *label) {
     auto shader=newShader(code,name,label); auto p=new IDirect3DVertexShader9; p->m_device=this; p->m_restype=(D3DRESOURCETYPE)0; p->m_vtxProgram=nullptr;
     p->m_vtxHighWater=p->m_vtxHighWaterBone=0; p->m_maxVertexAttrs=0; memset(p->m_vtxAttribMap,0xff,sizeof(p->m_vtxAttribMap));
-    for(int i=0;i<shader->parsed->attribute_count;++i) { auto &a=shader->parsed->attributes[i]; unsigned reg; if(sscanf(a.name,"v%u",&reg)!=1 || reg>=16)fatal("vertex attribute",@(a.name)); p->m_vtxAttribMap[reg]=(a.usage<<4)|a.index; p->m_maxVertexAttrs=std::max(p->m_maxVertexAttrs,reg+1); }
+    memcpy(p->m_vtxAttribMap,shader->vertexAttribMap.data(),sizeof(p->m_vtxAttribMap));p->m_maxVertexAttrs=shader->maxVertexAttrs;
     for(auto &u:shader->uniforms)if(u.type==MOJOSHADER_UNIFORM_FLOAT)p->m_vtxHighWater=std::max(p->m_vtxHighWater,(unsigned)(u.index+std::max(1,u.array_count)));
     p->m_native=shader.release(); *out=p; return S_OK;
 }
 HRESULT IDirect3DDevice9::CreatePixelShader(const DWORD *code,IDirect3DPixelShader9 **out,const char *name,char *label,const uint32 *centroid) {
     auto shader=newShader(code,name,label,centroid); auto p=new IDirect3DPixelShader9; p->m_device=this; p->m_restype=(D3DRESOURCETYPE)0; p->m_pixProgram=nullptr;
     p->m_pixHighWater=p->m_pixSamplerMask=p->m_pixSamplerTypes=p->m_pixFragDataMask=0;
-    for(int i=0;i<shader->parsed->sampler_count;++i) p->m_pixSamplerMask|=1u<<shader->parsed->samplers[i].index;
+    for(unsigned slot:shader->samplerSlots)p->m_pixSamplerMask|=1u<<slot;
     for(auto &u:shader->uniforms)if(u.type==MOJOSHADER_UNIFORM_FLOAT)p->m_pixHighWater=std::max(p->m_pixHighWater,(unsigned)(u.index+std::max(1,u.array_count)));
     p->m_native=shader.release(); *out=p; return S_OK;
 }
@@ -253,7 +256,7 @@ struct SourceMetalDeviceAccess {
     template<class T> static void keyValue(std::string &k,const T &v) { k.append(reinterpret_cast<const char*>(&v),sizeof(v)); }
     static id<MTLTexture> targetTexture(IDirect3DSurface9 *surface,bool srgb=false) { return surface ? native<Image>(surface).image->renderView(srgb):nil; }
     static MTLRenderPassDescriptor *pass(IDirect3DDevice9 *dev,DWORD clear=0,D3DCOLOR color=0,float z=1,DWORD stencil=0) {
-        auto &d=native<Device>(dev); auto p=[MTLRenderPassDescriptor renderPassDescriptor];
+        auto &d=native<Device>(dev); auto p=acquireSourcePassDescriptor();
         unsigned width=UINT_MAX,height=UINT_MAX;
         for(unsigned i=0;i<4;++i) if(auto surface=dev->m_pRenderTargets[i]) {
             auto &image=native<Image>(surface); auto a=p.colorAttachments[i];
@@ -329,60 +332,7 @@ struct SourceMetalDeviceAccess {
         }
         auto state=[device() newDepthStencilStateWithDescriptor:desc]; if(!state)fatal("depth stencil",@"state creation failed"); d.depthStates.emplace(key,state); d.lastDepth=state; return state;
     }
-    static void clearRects(IDirect3DDevice9 *dev,DWORD count,const D3DRECT *rects,DWORD flags,D3DCOLOR color,float z,DWORD stencil) {
-    @autoreleasepool {
-        auto &d=native<Device>(dev); beginPass(dev);
-        const unsigned width=d.renderWidth,height=d.renderHeight;
-        auto descriptor=[MTLRenderPipelineDescriptor new]; descriptor.label=@"Source rectangle clear";
-        std::string key="Source rectangle clear"; keyValue(key,flags);
-        std::string source="#include <metal_stdlib>\nusing namespace metal;\nstruct V {float4 p [[position]];};\nvertex V clear_v(uint i [[vertex_id]],constant float4 *c [[buffer(0)]]) {const float2 p[3]={float2(-1,-1),float2(3,-1),float2(-1,3)}; V o; o.p=float4(p[i],c[1].x,1);return o;}\n";
-        std::string fields,assignments; unsigned samples=1;
-        for(unsigned i=0;i<4;++i) {
-            auto attachment=descriptor.colorAttachments[i]; auto texture=targetTexture(dev->m_pRenderTargets[i],d.state.rs[D3DRS_SRGBWRITEENABLE]!=0);
-            attachment.pixelFormat=texture ? texture.pixelFormat:MTLPixelFormatInvalid;
-            attachment.writeMask=(flags&D3DCLEAR_TARGET) ? MTLColorWriteMaskAll:MTLColorWriteMaskNone;
-            keyValue(key,attachment.pixelFormat);
-            if(texture) { samples=texture.sampleCount; if(flags&D3DCLEAR_TARGET) {
-                fields+="float4 c"+std::to_string(i)+" [[color("+std::to_string(i)+")]];";
-                assignments+="o.c"+std::to_string(i)+"=c[0];";
-            } }
-        }
-        if(dev->m_pDepthStencil) { auto &t=*native<Image>(dev->m_pDepthStencil).image; descriptor.depthAttachmentPixelFormat=t.format.linear; if(t.format.stencil)descriptor.stencilAttachmentPixelFormat=t.format.linear; samples=t.samples; }
-        descriptor.rasterSampleCount=samples; keyValue(key,samples); keyValue(key,descriptor.depthAttachmentPixelFormat); keyValue(key,descriptor.stencilAttachmentPixelFormat);
-        auto found=d.pipelines.find(key); id<MTLRenderPipelineState> pipeline;
-        if(found!=d.pipelines.end())pipeline=found->second;
-        else {
-            if(!fields.empty())source+="struct F {"+fields+"};fragment F clear_f(constant float4 *c [[buffer(0)]]) {F o;"+assignments+"return o;}";
-            auto library=warmProceduralLibrary(@(source.c_str()));
-            descriptor.vertexFunction=warmProceduralFunction(library,@(source.c_str()),@"clear_v"); if(!fields.empty())descriptor.fragmentFunction=warmProceduralFunction(library,@(source.c_str()),@"clear_f");
-            pipeline=d.pipeline(key,descriptor);
-        }
-        auto depth=[MTLDepthStencilDescriptor new]; depth.depthCompareFunction=MTLCompareFunctionAlways; depth.depthWriteEnabled=(flags&D3DCLEAR_ZBUFFER)!=0 && descriptor.depthAttachmentPixelFormat!=MTLPixelFormatInvalid;
-        // Derive the cache key from the requested clear and attachment.
-        // SDK null_resettable stencil getters may return a default descriptor;
-        // pointer presence cannot distinguish Keep from an actual stencil clear.
-        const bool stencilClear=(flags&D3DCLEAR_STENCIL)!=0 && descriptor.stencilAttachmentPixelFormat!=MTLPixelFormatInvalid;
-        if(stencilClear) {
-            auto st=[MTLStencilDescriptor new]; st.stencilCompareFunction=MTLCompareFunctionAlways; st.depthStencilPassOperation=MTLStencilOperationReplace; st.readMask=st.writeMask=0xff;
-            depth.frontFaceStencil=depth.backFaceStencil=st;
-        }
-        id<MTLDepthStencilState> ds;
-        if(icsm_metal_temporary_reuse.GetBool())ds=clearDepthState(depth.depthWriteEnabled,stencilClear,depth);
-        else {perfCount(PerfCount::ClearDepthAllocations);ds=[device() newDepthStencilStateWithDescriptor:depth];}
-        [d.encoder setRenderPipelineState:pipeline]; [d.encoder setDepthStencilState:ds]; [d.encoder setStencilReferenceValue:stencil];
-        [d.encoder setViewport:MTLViewport{0,0,double(width),double(height),0,1}]; [d.encoder setCullMode:MTLCullModeNone]; [d.encoder setTriangleFillMode:MTLTriangleFillModeFill]; [d.encoder setDepthBias:0 slopeScale:0 clamp:0];
-        [d.encoder setVisibilityResultMode:MTLVisibilityResultModeDisabled offset:0];
-        const float values[8]={((color>>16)&255)/255.f,((color>>8)&255)/255.f,(color&255)/255.f,((color>>24)&255)/255.f,z,0,0,0};
-        [d.encoder setVertexBytes:values length:sizeof(values) atIndex:0]; if(!fields.empty())[d.encoder setFragmentBytes:values length:sizeof(values) atIndex:0];
-        for(unsigned i=0;i<count;++i) {
-            const auto &r=rects[i]; unsigned x=std::min(width,(unsigned)std::max(0,r.x1)),y=std::min(height,(unsigned)std::max(0,r.y1));
-            unsigned right=std::min(width,(unsigned)std::max(0,r.x2)),bottom=std::min(height,(unsigned)std::max(0,r.y2)); if(right<=x || bottom<=y)continue;
-            [d.encoder setScissorRect:MTLScissorRect{x,y,right-x,bottom-y}]; [d.encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-        }
-        if(d.activeQuery)startVisibility(d);
-        d.encoded=EncodedState{}; // Clear changed encoder bindings.
-        } // autoreleasepool
-}
+#include "clear_rects_ios.inc"
     static MTLSamplerAddressMode address(unsigned mode) {
         switch(mode) { case D3DTADDRESS_WRAP:return MTLSamplerAddressModeRepeat; case D3DTADDRESS_CLAMP:return MTLSamplerAddressModeClampToEdge; case D3DTADDRESS_BORDER:return MTLSamplerAddressModeClampToBorderColor; default:fatal("sampler address",@"unsupported Source address mode"); return MTLSamplerAddressModeClampToEdge; }
     }
@@ -445,8 +395,8 @@ struct SourceMetalDeviceAccess {
             auto descriptor=[MTLRenderPipelineDescriptor new]; descriptor.vertexFunction=vs.function; descriptor.fragmentFunction=ps.function;
             descriptor.label=[NSString stringWithFormat:@"%s + %s",vs.label.c_str(),ps.label.c_str()];
             auto v=[MTLVertexDescriptor vertexDescriptor];
-        for(int i=0;i<vs.parsed->attribute_count;++i) {
-            auto &a=vs.parsed->attributes[i]; unsigned reg=0; if(sscanf(a.name,"v%u",&reg)!=1)fatal("attribute",@(a.name));
+        for(const auto& a:vs.attributes) {
+            const unsigned reg=a.reg;
             const D3DVERTEXELEMENT9 *element=nullptr;
             for(unsigned j=0;j<dev->m_pVertDecl->m_elemCount;++j) { auto &e=dev->m_pVertDecl->m_elements[j].m_dxdecl; if(e.Usage==a.usage && e.UsageIndex==a.index) { element=&e; break; } }
             if(!element) {
@@ -531,8 +481,8 @@ struct SourceMetalDeviceAccess {
                 if(vertex)[d.encoder setVertexBuffer:b offset:offset atIndex:0]; else [d.encoder setFragmentBuffer:b offset:offset atIndex:0];
                 d.uniformValues[stage]=constants; encoded.uniformValid[stage]=true;
             }
-            for(int i=0;i<shader->parsed->sampler_count;++i) {
-                unsigned slot=shader->parsed->samplers[i].index,sourceSlot=slot+(vertex ? 16:0);
+            for(unsigned slot:shader->samplerSlots) {
+                unsigned sourceSlot=slot+(vertex ? 16:0);
                 auto t=dev->m_textures[sourceSlot]; id<MTLTexture> texture=t ? native<Image>(t).image->view(d.state.sampler[sourceSlot][D3DSAMP_SRGBTEXTURE]!=0):nil;
                 bool shadow=(shader->shadowSamplerMask&(1u<<slot))!=0;
                 const bool worldMaterial=!vertex && !shadow && (shader->worldMaterialSamplerMask&(1u<<slot)) && texture.mipmapLevelCount>1 && d.state.sampler[sourceSlot][D3DSAMP_MIPFILTER]!=D3DTEXF_NONE;
@@ -737,11 +687,13 @@ HRESULT IDirect3DDevice9::Clear(DWORD count,const D3DRECT *rects,DWORD flags,D3D
     if(count && !rects)return D3DERR_INVALIDCALL;
     auto &d=native<Device>(this);
     const DWORD srgb=d.state.rs[D3DRS_SRGBWRITEENABLE];
-    if((flags&D3DCLEAR_TARGET) && srgb)SetRenderState(D3DRS_SRGBWRITEENABLE,0);
+    const bool keepSRGBView=icsm_metal_invariant_clear_reuse.GetBool() && ICSMClearColorIsSRGBInvariant(color);
+    if((flags&D3DCLEAR_TARGET) && srgb && keepSRGBView)perfCount(PerfCount::InvariantClearReuses);
+    if((flags&D3DCLEAR_TARGET) && srgb && !keepSRGBView)SetRenderState(D3DRS_SRGBWRITEENABLE,0);
     if(count) { if(!rects)return D3DERR_INVALIDCALL; SourceMetalDeviceAccess::clearRects(this,count,rects,flags,color,z,stencil); }
     else if(d.state.rs[D3DRS_SCISSORTESTENABLE]) { const auto &r=d.state.scissor; D3DRECT rect={r.left,r.top,r.right,r.bottom}; SourceMetalDeviceAccess::clearRects(this,1,&rect,flags,color,z,stencil); }
     else SourceMetalDeviceAccess::beginPass(this,flags,color,z,stencil);
-    if((flags&D3DCLEAR_TARGET) && srgb)SetRenderState(D3DRS_SRGBWRITEENABLE,srgb);
+    if((flags&D3DCLEAR_TARGET) && srgb && !keepSRGBView)SetRenderState(D3DRS_SRGBWRITEENABLE,srgb);
     return S_OK;
     } // autoreleasepool
 }
@@ -933,3 +885,9 @@ extern "C" __attribute__((visibility("default"))) void SourceMetalFrameInterpola
 extern "C" __attribute__((visibility("default"))) void SourceMetalFrameInterpolationViewmodel() {
     if(g_sourceCombatD3DDevice)SourceMetalDeviceAccess::interpolationViewmodel(g_sourceCombatD3DDevice);
 }
+
+#include "clear_selftest_ios.inc"
+
+#include "alpha_atlas_selftest_ios.inc"
+
+#include "texture_staging_selftest_ios.inc"

@@ -11,6 +11,11 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include "SDL_events.h"
+#include "SDL_scancode.h"
+// Internal SDL extension compiled into this same framework. It uses a source
+// bit distinct from physical keys and the system text-input keyboard.
+extern "C" int SDL_SendTouchKeyboardKey(Uint8 state,SDL_Scancode scancode);
 
 #if !__has_feature(objc_arc)
 #error touch_ui_ios.mm must be compiled with -fobjc-arc
@@ -24,9 +29,10 @@ static void shutdownSettingsScroll();
 static void shutdownConsoleHeader();
 static void updateInventoryLayout();
 static void shutdownInventory();
+static void trimInventoryMemory();
 
 namespace {
-enum Kind { Held, Weapon, Command };
+enum Kind { Held, Weapon, Command, Keyboard };
 struct Control {
     __strong id<TCControl> native;
     CGRect rect;
@@ -37,8 +43,9 @@ struct Control {
     unsigned owners=0;
 };
 struct Owner {
-    enum Type { Ignored, ControlOwner, LookOwner, MoveOwner } type=Ignored;
+    enum Type { Ignored, ControlOwner, LookOwner, MoveOwner, KeyboardOwner } type=Ignored;
     size_t control=0;
+    int keyboard=0;
     CGPoint last=CGPointZero;
     CGPoint origin=CGPointZero;
     double timestamp=0;
@@ -79,11 +86,19 @@ static UIKitRoute routeUIKitTouch(uintptr_t key,int phase,bool wantsCustom) {
     return route;
 }
 static unsigned actionOwners[SourceTouchActionCount]={};
+static std::map<int,unsigned> keyboardOwners;
+static void sendKeyboard(int code,bool pressed) {SDL_SendTouchKeyboardKey(pressed?SDL_PRESSED:SDL_RELEASED,(SDL_Scancode)code);}
+static void (*keyboardSink)(int,bool)=sendKeyboard;
+static void holdKeyboard(int code,bool pressed) {
+    if(pressed){if(!keyboardOwners[code]++)keyboardSink(code,true);}
+    else {auto it=keyboardOwners.find(code);if(it!=keyboardOwners.end() && !--it->second){keyboardSink(code,false);keyboardOwners.erase(it);}}
+}
 static uintptr_t moveOwner=0,lookOwner=0;
 static CGRect lookRect=CGRectZero,moveRect=CGRectZero;
 static CGFloat moveRadius=64;
 static bool dirty=true,available=false;
 static bool inventoryDirty=false,focusActive=true;
+static bool buttonsHidden=false;
 static bool connecting=false;
 static uint64_t mfiFilterMatches=0;
 static __strong NSArray *notificationTokens;
@@ -91,19 +106,24 @@ static std::atomic<bool> framePending{false};
 static float pointsPerMM=0,weaponOldHeight=0,weaponHeight=0;
 static uint64_t actualSamples=0,lookSamples=0,renderedFrames=0,cancellations=0;
 static double lookDX=0,lookDY=0;
+static float moveX=0,moveY=0;
 
+#include "touch_keyboard_keys.inc"
 #include "touch_layout_store.inc"
 
 static bool consoleVisible=false;
+static bool calibrationRunning=false;
 
 static double now() { return NSProcessInfo.processInfo.systemUptime; }
 static bool visible() {return focusActive && state.active && state.mode==SourceTouchModeGameplay;}
 static bool gameplay() {return !editing && visible() && state.game_input && !state.scoreboard_open;}
-static void callMove(float x,float y,double t) {if(callbacks.move)callbacks.move(callbackUser,x,y,t);}
-static void callLook(float x,float y,double t) {
+static void callMove(float x,float y,double t) {moveX=x;moveY=y;if(callbacks.move)callbacks.move(callbackUser,x,y,t);}
+static SourceTouchLookSampleCallback lookSampleCallback=nullptr;
+static void callLook(float x,float y,double t,double interval=0) {
     if(x==0 && y==0)return;
     ++lookSamples;lookDX+=x;lookDY+=y;
-    if(callbacks.look)callbacks.look(callbackUser,x,y,t);
+    if(lookSampleCallback)lookSampleCallback(callbackUser,x,y,t,interval);
+    else if(callbacks.look)callbacks.look(callbackUser,x,y,t);
 }
 static void callAction(int a,bool pressed,double t) {
     if(a>=0 && a<SourceTouchActionCount && callbacks.action)
@@ -131,25 +151,39 @@ static bool lookAllowed(CGPoint p) {
     if(!gameplay() || !CGRectContainsPoint(lookRect,p))return false;
     // Include disabled/empty inventory targets: no control's visible surface
     // can leak gameplay mouse look.
-    for(const auto &c:controls)if(CGRectContainsPoint(c.rect,p))return false;
+    if(!buttonsHidden)for(const auto &c:controls)if(CGRectContainsPoint(c.rect,p))return false;
     return true;
 }
 static bool moveAllowed(CGPoint p) {
     if(!gameplay() || !CGRectContainsPoint(moveRect,p))return false;
-    for(const auto &c:controls)if(CGRectContainsPoint(c.rect,p))return false;
+    // This is touch-down hit testing only. Use the same exact geometry as
+    // begin(): the empty corners around a circular button are not buttons.
+    if(!buttonsHidden)for(const auto &c:controls)if(contains(c,p))return false;
     return true;
 }
 static CGPoint center(const Control &c) {return CGPointMake(CGRectGetMidX(c.rect),CGRectGetMidY(c.rect));}
-static void cancel(double t) {
-    for(auto &route:uikitRoutes)if(route.second==CustomRoute)route.second=CancelledRoute;
+static void cancel(double t,bool keepScoreKey=false) {
+    // A held Tab must survive the scoreboard it just opened. Every other
+    // mode/focus/editor transition releases keyboard ownership normally.
+    std::map<uintptr_t,Owner> kept;
+    if(keepScoreKey)for(const auto &entry:owners)
+        if(entry.second.type==Owner::KeyboardOwner && entry.second.keyboard==SDL_SCANCODE_TAB)kept.insert(entry);
+    for(auto &route:uikitRoutes)if(route.second==CustomRoute && !kept.count(route.first))route.second=CancelledRoute;
     for(auto &c:controls)if(c.owners){[c.native handleTouchEndedAtPoint:center(c)];c.owners=0;}
     for(int i=0;i<SourceTouchActionCount;++i)if(actionOwners[i]){actionOwners[i]=0;callAction(i,false,t);}
-    owners.clear();moveOwner=lookOwner=0;callMove(0,0,t);
+    for(auto it=keyboardOwners.begin();it!=keyboardOwners.end();) {
+        if(!kept.empty() && it->first==SDL_SCANCODE_TAB){++it;continue;}
+        keyboardSink(it->first,false);it=keyboardOwners.erase(it);
+    }
+    owners=std::move(kept);moveOwner=lookOwner=0;callMove(0,0,t);
     if(callbacks.reset)callbacks.reset(callbackUser,t);
     ++cancellations;
 }
 static void move(const Owner &owner,CGPoint p,double t) {
-    if(!moveAllowed(p)){callMove(0,0,t);return;}
+    if(!gameplay()){callMove(0,0,t);return;}
+    // The initial touch-down captured this finger for movement. Crossing a
+    // button or the divider cannot zero it or transfer it to another action.
+    // end()/cancel() still release the vector immediately.
     // Relative to this finger's touch-down, with the original stick's travel
     // distance. Hold the resulting vector until the next sample or release.
     float x=(p.x-owner.origin.x)/moveRadius,y=(owner.origin.y-p.y)/moveRadius;
@@ -196,18 +230,19 @@ static void refreshWeapons() {
         for(const auto &item:inventory)if(item.slot==c.value && (!shown || item.selected))shown=&item;
         NSString *text=shown ? [[NSString alloc] initWithUTF8String:shown->name.c_str()] : @"—";
         if(!text.length)text=[NSString stringWithFormat:@"槽位%d",c.value];
-        c.enabled=gameplay() && shown;c.native.enabled=c.enabled;
+        c.enabled=!buttonsHidden && gameplay() && shown;c.native.enabled=c.enabled;
         ((TCButton*)c.native).contents=contents(text,c.rect.size,false,shown && shown->selected);
     }
     inventoryDirty=false;
 }
 static void add(NSString *name,NSString *text,CGRect rect,Kind kind,int value,bool circle,bool enabled,bool selected=false) {
+    enabled=enabled && (!buttonsHidden || editing);
     rect=applyLayout(name,rect);
     TCButtonDescriptor *desc=[TCButtonDescriptor new];desc.label=[[TCControlLabel alloc] initWithName:name role:TCControlLabelRoleButton];
     desc.anchor=TCControlLayoutAnchorCenter;desc.anchorCoordinateSystem=TCControlLayoutAnchorCoordinateSystemAbsolute;
     desc.offset=CGPointMake(CGRectGetMidX(rect)-viewSize.width*.5,CGRectGetMidY(rect)-viewSize.height*.5);
     desc.size=rect.size;desc.colliderShape=circle?TCColliderShapeCircle:TCColliderShapeRect;desc.highlightDuration=0;
-    desc.contents=contents(text,rect.size,circle,selected);desc.zIndex=10;
+    desc.contents=contents(text,rect.size,circle,selected);desc.zIndex=10+(NSInteger)controls.size();
     TCButton *button=[controller addButtonWithDescriptor:desc];button.enabled=enabled;
     Control c;c.native=button;c.rect=rect;c.label=name.UTF8String;c.kind=kind;c.value=value;c.circle=circle;c.enabled=enabled;controls.push_back(c);
 }
@@ -219,7 +254,7 @@ static void rebuild() {
     if(!controller || viewSize.width<=0 || viewSize.height<=0)return;
     // Layout changes invalidate prior hit geometry; never transfer a touch to
     // whichever button happens to occupy its former coordinates.
-    if(!owners.empty())cancel(now());
+    if(!owners.empty())cancel(now(),state.scoreboard_open);
     [controller removeAllControls];controls.clear();defaultRects.clear();
     controller.size=viewSize;controller.drawableSize=drawableSize;
     const CGFloat w=viewSize.width,h=viewSize.height;
@@ -293,6 +328,10 @@ static void rebuild() {
     // The design explicitly calls for independent walking control. Keep it
     // immediately to the right of the left-thumb stick, away from weapon slots.
     add(@"walk",@"静步",CGRectMake(moveX+radius+8,moveY-24,48,48),Held,SourceTouchWalk,false,game);
+    for(NSUInteger i=0;i<savedCustomButtons.count;++i) {
+        NSDictionary *entry=savedCustomButtons[i];int key=[entry[@"key"] intValue];
+        add(entry[@"id"],keyboardTitle(key),customDefaultRect(i),Keyboard,key,false,game || (visible() && state.scoreboard_open && key==SDL_SCANCODE_TAB));
+    }
     dirty=false;inventoryDirty=false;
 }
 
@@ -355,19 +394,25 @@ static void watchLifecycle() {
     id sceneActive=[center addObserverForName:UISceneDidActivateNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification*) {
         std::lock_guard<std::recursive_mutex> lock(mutex);focusActive=true;
     }];
-    notificationTokens=@[inactive,active,sceneInactive,sceneActive];
+    id memory=[center addObserverForName:UIApplicationDidReceiveMemoryWarningNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification*) {
+        std::lock_guard<std::recursive_mutex> lock(mutex);trimInventoryMemory();
+    }];
+    notificationTokens=@[inactive,active,sceneInactive,sceneActive,memory];
 }
 
 static void begin(uintptr_t key,CGPoint p,double t) {
     if(owners.count(key))return;
     Owner owner;owner.last=p;owner.origin=p;owner.timestamp=t;
     // Exact control hit geometry always wins, even for disabled targets.
-    for(size_t i=0;i<controls.size();++i)if(contains(controls[i],p)) {
+    // Later controls are drawn above earlier controls; use the same order for
+    // overlapping custom buttons rather than letting an obscured key win.
+    if(!buttonsHidden)for(size_t n=controls.size();n>0;--n)if(size_t i=n-1;contains(controls[i],p)) {
         auto &c=controls[i];
         if(!c.enabled)break;
         owner.type=Owner::ControlOwner;owner.control=i;
         if(!c.owners++)[c.native handleTouchBeganAtPoint:center(c)];
-        if(c.kind==Held){if(!actionOwners[c.value]++)callAction(c.value,true,t);}
+        if(c.kind==Keyboard){owner.type=Owner::KeyboardOwner;owner.keyboard=c.value;holdKeyboard(c.value,true);}
+        else if(c.kind==Held){if(!actionOwners[c.value]++)callAction(c.value,true,t);}
         else if(c.kind==Command){if(callbacks.command)callbacks.command(callbackUser,(SourceTouchCommand)c.value,t);}
         else if(c.kind==Weapon) {
             std::vector<const WeaponInfo*> items;for(const auto &item:inventory)if(item.slot==c.value)items.push_back(&item);
@@ -387,7 +432,7 @@ static void motion(uintptr_t key,CGPoint p,double t) {
     auto &o=it->second;
     if(o.type==Owner::LookOwner) {
         bool allowed=lookAllowed(p);
-        if(allowed && o.inside)callLook(float(p.x-o.last.x),float(p.y-o.last.y),t);
+        if(allowed && o.inside)callLook(float(p.x-o.last.x),float(p.y-o.last.y),t,t-o.timestamp);
         o.inside=allowed;
     } else if(o.type==Owner::MoveOwner) {
         move(o,p,t);
@@ -402,6 +447,11 @@ static void end(uintptr_t key,double t) {
     auto o=it->second;owners.erase(it);
     if(o.type==Owner::LookOwner){lookOwner=0;return;}
     if(o.type==Owner::MoveOwner){moveOwner=0;callMove(0,0,t);return;}
+    if(o.type==Owner::KeyboardOwner) {
+        holdKeyboard(o.keyboard,false);
+        if(o.control<controls.size()) {auto &c=controls[o.control];if(c.kind==Keyboard && c.value==o.keyboard && c.owners && !--c.owners)[c.native handleTouchEndedAtPoint:center(c)];}
+        return;
+    }
     if(o.type!=Owner::ControlOwner || o.control>=controls.size())return;
     auto &c=controls[o.control];
     if(c.owners && !--c.owners)[c.native handleTouchEndedAtPoint:center(c)];
@@ -412,6 +462,7 @@ static void end(uintptr_t key,double t) {
 #include "touch_layout_editor.inc"
 #include "player_name_editor.inc"
 #include "room_browser.inc"
+#include "frame_calibration_ios.inc"
 #include "translucent_surface_ios.inc"
 #include "console_header_ios.inc"
 #include "glass_navigation_ios.inc"
@@ -420,6 +471,29 @@ static void end(uintptr_t key,double t) {
 #include "glass_inventory_ios.inc"
 
 extern "C" float SourceTouchMenuUIScale() {return menuUIScale.load();}
+
+extern "C" bool SourceTouchSaveInventoryPreview(const char *filename,const void *bgra,int width,int height) {
+    @autoreleasepool {
+        if(!filename || !bgra || width<=0 || height<=0 || width>1024 || height>1024)return false;
+        NSString *file=[NSString stringWithUTF8String:filename];
+        NSRegularExpression *pattern=[NSRegularExpression regularExpressionWithPattern:@"^preview_[0-9]+(_[0-9]+){7}\\.png$" options:0 error:nil];
+        if([pattern numberOfMatchesInString:file options:0 range:NSMakeRange(0,file.length)]!=1)return false;
+        CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();
+        CGDataProviderRef provider=CGDataProviderCreateWithData(NULL,bgra,(size_t)width*height*4,NULL);
+        CGImageRef image=CGImageCreate(width,height,8,32,(size_t)width*4,space,
+            kCGBitmapByteOrder32Little|kCGImageAlphaPremultipliedFirst,provider,NULL,false,kCGRenderingIntentDefault);
+        NSData *png=image?UIImagePNGRepresentation([UIImage imageWithCGImage:image]):nil;
+        if(image)CGImageRelease(image);CGDataProviderRelease(provider);CGColorSpaceRelease(space);
+        if(!png.length)return false;
+        NSString *docs=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;
+        NSString *directory=[docs stringByAppendingPathComponent:@"runtime-i5/csgo/cfg/icsm-sticker-previews"];
+        NSError *error=nil;
+        if(![NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error])return false;
+        BOOL saved=[png writeToFile:[directory stringByAppendingPathComponent:file] options:NSDataWritingAtomic error:&error];
+        if(!saved)fprintf(stderr,"ICSM_STICKER_PREVIEW encode_write_error=%s\n",error.localizedDescription.UTF8String);
+        return saved;
+    }
+}
 
 extern "C" void SourceTouchExportErrorLogs() {
     NSCAssert(NSThread.isMainThread,@"Log sharing belongs to the Source main thread");
@@ -437,7 +511,7 @@ extern "C" void SourceTouchShutdown() {
     shutdownConsoleHeader();
     shutdownInventory();
     std::lock_guard<std::recursive_mutex> lock(mutex);cancel(now());[controller disconnect];controller=nil;metalDevice=nil;host=nil;controls.clear();available=false;dirty=true;
-    uikitRoutes.clear();viewOrientation=UIInterfaceOrientationUnknown;
+    uikitRoutes.clear();viewOrientation=UIInterfaceOrientationUnknown;buttonsHidden=false;
     for(id token in notificationTokens)[NSNotificationCenter.defaultCenter removeObserver:token];notificationTokens=nil;
 }
 extern "C" bool SourceTouchOwnsGameController(void *gameController) {
@@ -454,13 +528,39 @@ extern "C" bool SourceTouchOwnsGameController(void *gameController) {
 }
 extern "C" void SourceTouchSetCallbacks(const SourceTouchCallbacks *c,void *user) {
     std::lock_guard<std::recursive_mutex> lock(mutex);
+    lookSampleCallback=nullptr;
     if(!c || c->struct_size!=sizeof(*c)){cancel(now());callbacks={};callbackUser=nullptr;return;}
     callbacks=*c;callbackUser=user;
+}
+extern "C" void SourceTouchSetLookSampleCallback(SourceTouchLookSampleCallback callback) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    lookSampleCallback=callback;
+}
+extern "C" void SourceTouchSetButtonsHidden(bool hidden) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    if(buttonsHidden==hidden)return;
+    // Release held actions and discard old owners before changing hit targets.
+    cancel(now());buttonsHidden=hidden;dirty=true;
+}
+extern "C" bool SourceTouchKeyboardTestEdge(int code,bool pressed) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    if(!NSThread.isMainThread || !keyboardTitle(code) || editing || (pressed && !gameplay()))return false;
+    // Local validation owns a distinct non-UIKit token, so scoreboard/mode
+    // changes exercise the same release policy as a real custom-button owner.
+    const uintptr_t token=UINTPTR_MAX-(uintptr_t)code;
+    if(pressed) {
+        if(owners.count(token))return false;
+        Owner owner;owner.type=Owner::KeyboardOwner;owner.keyboard=code;owner.control=controls.size();
+        owners[token]=owner;holdKeyboard(code,true);
+    } else end(token,now());
+    return true;
 }
 extern "C" void SourceTouchUpdateState(const SourceTouchState *s) {
     std::lock_guard<std::recursive_mutex> lock(mutex);
     if(!s || s->struct_size!=sizeof(*s)){cancel(now());state={};dirty=true;return;}
-    if(state.mode!=s->mode || state.active!=s->active || state.game_input!=s->game_input || state.scoreboard_open!=s->scoreboard_open) {cancel(now());dirty=true;}
+    if(state.mode!=s->mode || state.active!=s->active || state.game_input!=s->game_input || state.scoreboard_open!=s->scoreboard_open) {
+        cancel(now(),s->mode==SourceTouchModeGameplay && s->active && s->scoreboard_open);dirty=true;
+    }
     if(state.radar_valid!=s->radar_valid || state.score_valid!=s->score_valid ||
        std::memcmp(&state.radar,&s->radar,sizeof(s->radar)) || std::memcmp(&state.score,&s->score,sizeof(s->score)) ||
        state.render_width!=s->render_width || state.render_height!=s->render_height ||
@@ -486,6 +586,10 @@ extern "C" void SourceTouchSetView(void *view) {
     if(NSThread.isMainThread && editing && dirty && controller){rebuild();[layoutEditor setNeedsLayout];}
 }
 extern "C" bool SourceTouchUIKitTouches(void *view,void *set,void *event,int phase) {
+    // Keep normal touch controls in the rendering workload, while preventing
+    // a swipe from moving a fixed benchmark camera. UIKit's cancel button is
+    // a separate window subview and still receives its own events.
+    if(calibrationRunning)return true;
     refreshHostState();
     std::lock_guard<std::recursive_mutex> lock(mutex);UIView *v=(__bridge UIView*)view;
     updateView(v);UIView *coordinates=host?:v;
@@ -540,7 +644,7 @@ static void encodeTouchRendering(id<MTLRenderCommandEncoder> encoder,id<MTLTextu
 extern "C" void SourceTouchRenderMetalWithEncoder(void *buffer,void *texture) {
     refreshHostState();
     std::lock_guard<std::recursive_mutex> lock(mutex);
-    if(editing || !visible() || !buffer || !texture)return;
+    if(editing || buttonsHidden || !visible() || !buffer || !texture)return;
     @autoreleasepool {
         id<MTLRenderCommandEncoder> encoder=(__bridge id<MTLRenderCommandEncoder>)buffer;
         id<MTLTexture> target=(__bridge id<MTLTexture>)texture;
@@ -551,7 +655,7 @@ extern "C" void SourceTouchRenderMetalWithEncoder(void *buffer,void *texture) {
 extern "C" void SourceTouchRenderMetal(void *buffer,void *texture) {
     refreshHostState();
     std::lock_guard<std::recursive_mutex> lock(mutex);
-    if(editing || !visible() || !buffer || !texture)return;
+    if(editing || buttonsHidden || !visible() || !buffer || !texture)return;
     @autoreleasepool {
         id<MTLCommandBuffer> command=(__bridge id<MTLCommandBuffer>)buffer;id<MTLTexture> target=(__bridge id<MTLTexture>)texture;
         if(!prepareTouchRendering(command.device,target))return;
@@ -586,13 +690,25 @@ static NSDictionary *touchDiagnosticsSnapshot() {
     NSDictionary *fireLayout=@{@"requested_diameter_increase_mm":@50,@"diameter_points":@(fire?fire->rect.size.width:0),
         @"intersecting_controls":fireControls,@"intersecting_hud":fireHUD,@"inside_safe_view":@(fireInside),@"before_look_region":@(fireBeforeLook),
         @"fits":@(fire && fireInside && fireBeforeLook && fireControls.count==0 && fireHUD.count==0)};
+    NSMutableArray *physicalControllers=[NSMutableArray array];
+    for(GCController *pad in GCController.controllers) {
+        if(controller && controller.controller==pad)continue;
+        [physicalControllers addObject:@{@"name":pad.vendorName?:@"",@"category":pad.productCategory?:@"",
+            @"extended_gamepad":@(pad.extendedGamepad!=nil),
+            @"native_sticks_left_xy_right_xy":@[@(pad.extendedGamepad.leftThumbstick.xAxis.value),
+                @(pad.extendedGamepad.leftThumbstick.yAxis.value),@(pad.extendedGamepad.rightThumbstick.xAxis.value),
+                @(pad.extendedGamepad.rightThumbstick.yAxis.value)]}];
+    }
     NSDictionary *d=@{@"backend":@"Apple TCTouchController / existing Metal command buffer",@"available":@(available),@"gameplay":@(gameplay()),@"visible":@(visible()),
+        @"physical_controllers":physicalControllers,
+        @"buttons_hidden":@(buttonsHidden),@"buttons_visible":@(visible() && !buttonsHidden),
         @"orientation":@(viewOrientation),@"orientation_changes":@(orientationChanges),@"uikit_routes":@(uikitRoutes.size()),
         @"view_points":@[@(viewSize.width),@(viewSize.height)],@"drawable_pixels":@[@(drawableSize.width),@(drawableSize.height)],
         @"safe_area":@[@(safe.top),@(safe.left),@(safe.bottom),@(safe.right)],@"points_per_mm":@(pointsPerMM),
         @"weapon_previous_height_points":@(weaponOldHeight),@"weapon_height_points":@(weaponHeight),@"look_rect_points":@[@(lookRect.origin.x),@(lookRect.origin.y),@(lookRect.size.width),@(lookRect.size.height)],
         @"movement_mode":@"left_half_swipe",@"move_rect_points":@[@(moveRect.origin.x),@(moveRect.origin.y),@(moveRect.size.width),@(moveRect.size.height)],
         @"move_full_speed_distance_points":@(moveRadius),@"move_owner_active":@(moveOwner!=0),
+        @"move_vector":@[@(moveX),@(moveY)],@"movement_capture":@"touch_down_until_release",
         @"active_touches":@(owners.size()),@"actual_samples":@(actualSamples),@"look_samples":@(lookSamples),@"look_total_points":@[@(lookDX),@(lookDY)],
         @"rendered_frames":@(renderedFrames),@"merged_overlay_frames":@(mergedOverlayFrames),@"separate_overlay_frames":@(separateOverlayFrames),@"cancel_transitions":@(cancellations),@"mfi_filter_matches":@(mfiFilterMatches),@"controls":rectangles,@"fire_layout":fireLayout,
         @"navigation":glassNavigationDiagnostics?:@{},
@@ -600,7 +716,7 @@ static NSDictionary *touchDiagnosticsSnapshot() {
         @"settings_scroll":settingsScrollDiagnostics(),
         @"console":consoleHeaderDiagnostics(),
         @"inventory":inventoryDiagnostics?:@{},
-        @"layout":@{@"editing":@(editing),@"loaded":@(layoutLoaded),@"saved_controls":savedLayout?:@{},@"saves_this_process":@(layoutSaves),@"error":layoutError?:@"",@"editor":layoutEditor?[layoutEditor diagnostics]:@{}}};
+        @"layout":@{@"editing":@(editing),@"loaded":@(layoutLoaded),@"saved_controls":savedLayout?:@{},@"custom_buttons":savedCustomButtons?:@[],@"held_keyboard_keys":@(keyboardOwners.size()),@"saves_this_process":@(layoutSaves),@"error":layoutError?:@"",@"editor":layoutEditor?[layoutEditor diagnostics]:@{}}};
     return d;
 }
 // UIKit's host already consumes Foundation objects. Avoid encoding and then
@@ -630,19 +746,24 @@ extern "C" size_t SourceTouchRoutingSelfTestJSON(char *buffer,size_t capacity) {
     auto savedControls=controls;
     auto savedUIKitRoutes=uikitRoutes;uikitRoutes.clear();
     auto savedCallbacks=callbacks;void *savedUser=callbackUser;
+    auto savedLookSampleCallback=lookSampleCallback;lookSampleCallback=nullptr;
+    auto savedKeyboardSink=keyboardSink;auto savedKeyboardOwners=keyboardOwners;keyboardOwners.clear();
     auto savedMoveOwner=moveOwner,savedLookOwner=lookOwner;
     uint64_t savedLookSamples=lookSamples,savedCancels=cancellations;
     double savedDX=lookDX,savedDY=lookDY;
+    float savedMoveX=moveX,savedMoveY=moveY;
     unsigned savedActionOwners[SourceTouchActionCount];std::memcpy(savedActionOwners,actionOwners,sizeof(actionOwners));
     struct Probe {
         bool pressed[SourceTouchActionCount]={};
         unsigned downs[SourceTouchActionCount]={},ups[SourceTouchActionCount]={};
         float x=0,y=0;
         std::vector<std::pair<float,float>> looks;
+        std::vector<std::pair<int,bool>> keyboard;
         unsigned resets=0,commands=0,selections=0;
         unsigned commandCounts[SourceTouchCommandCount]={};
     } probe;
     callbacks={};callbacks.struct_size=sizeof(callbacks);callbackUser=&probe;
+    keyboardSink=[](int code,bool down){((Probe*)callbackUser)->keyboard.push_back({code,down});};
     callbacks.action=[](void*u,SourceTouchAction a,bool p,double){auto &v=*(Probe*)u;v.pressed[a]=p;if(p)++v.downs[a];else ++v.ups[a];};
     callbacks.move=[](void*u,float x,float y,double){auto &v=*(Probe*)u;v.x=x;v.y=y;};
     callbacks.look=[](void*u,float x,float y,double){((Probe*)u)->looks.push_back({x,y});};
@@ -720,14 +841,14 @@ extern "C" size_t SourceTouchRoutingSelfTestJSON(char *buffer,size_t capacity) {
         bool exclusive=moveOwner==813 && std::fabs(probe.x-.5f)<1e-6f;
         end(814,.05);exclusive=exclusive && moveOwner==813 && std::fabs(probe.x-.5f)<1e-6f;
         motion(813,free,.06);
-        bool separate=probe.x==0 && probe.y==0 && probe.looks.empty() && moveOwner==813;
+        bool separate=std::hypot(probe.x,probe.y)>0 && probe.looks.empty() && moveOwner==813;
         motion(813,CGPointMake(movement.x+moveRadius*.5,movement.y),.07);
         end(813,.08);
         record(@"relative_origin_linear_move_release_and_exclusive_owner",originIdle && linear && exclusive && separate && moveOwner==0 && probe.x==0 && probe.y==0,
             @{@"origin_idle":@(originIdle),@"linear_half_speed":@(linear),@"second_left_finger_ignored":@(exclusive),@"right_half_does_not_become_look":@(separate)});
 
         cancel(0);begin(815,movement,.01);motion(815,center(controls[fi]),.02);
-        record(@"movement_over_button_stops_without_firing",probe.x==0 && probe.y==0 && !probe.pressed[SourceTouchAttack] && probe.looks.empty(),@{});end(815,.03);
+        record(@"movement_over_button_keeps_capture_without_firing",moveOwner==815 && std::hypot(probe.x,probe.y)>0 && !probe.pressed[SourceTouchAttack] && probe.looks.empty(),@{});end(815,.03);
 
         cancel(1);CGPoint m=movement;
         begin(101,m,2);begin(102,center(controls[fi]),2);begin(103,free,2);begin(104,center(controls[di]),2);
@@ -790,13 +911,35 @@ extern "C" size_t SourceTouchRoutingSelfTestJSON(char *buffer,size_t capacity) {
         for(int i=0;i<SourceTouchActionCount;++i)clean=clean && !probe.pressed[i] && actionOwners[i]==0;
         record(@"cancel_clears_held_move_and_pending_look",clean,@{});
     }
+    // Temporary hit targets exercise the real begin/motion/end/cancel router.
+    // Replace only the key sink, so validation never sends game commands.
+    cancel(50);controls.clear();probe.keyboard.clear();
+    Control first;first.native=nil;first.rect=CGRectMake(viewSize.width*.2,viewSize.height*.8,44,44);first.kind=Keyboard;first.value=SDL_SCANCODE_W;first.circle=false;first.enabled=true;first.label="custom.test.one";
+    Control second=first;second.rect.origin.x=viewSize.width*.7;second.label="custom.test.two";controls={first,second};
+    begin(9501,center(controls[0]),51);begin(9502,center(controls[1]),51);
+    motion(9501,CGPointMake(viewSize.width*.9,viewSize.height*.1),52);
+    motion(9502,CGPointMake(viewSize.width*.1,viewSize.height*.1),52);
+    bool keyHeld=keyboardOwners[SDL_SCANCODE_W]==2 && probe.keyboard.size()==1 && probe.keyboard[0]==std::make_pair((int)SDL_SCANCODE_W,true) && probe.looks.empty() && probe.x==0 && probe.y==0;
+    end(9501,53);keyHeld=keyHeld && keyboardOwners[SDL_SCANCODE_W]==1 && probe.keyboard.size()==1;
+    end(9502,54);
+    record(@"custom_keyboard_reference_counts_and_no_swipe_leak",keyHeld && keyboardOwners.empty() && probe.keyboard.size()==2 && probe.keyboard.back()==std::make_pair((int)SDL_SCANCODE_W,false),@{});
+    probe.keyboard.clear();begin(9503,center(controls[0]),55);cancel(56);
+    record(@"custom_keyboard_cancel_releases_once",owners.empty() && keyboardOwners.empty() && probe.keyboard.size()==2 && !probe.keyboard.back().second,@{});
+    probe.keyboard.clear();controls[0].value=SDL_SCANCODE_TAB;
+    routeUIKitTouch(9504,SourceTouchBegan,true);begin(9504,center(controls[0]),57);cancel(58,true);
+    bool tabKept=owners.count(9504) && keyboardOwners.count(SDL_SCANCODE_TAB) && probe.keyboard.size()==1 && uikitRoutes[9504]==CustomRoute;
+    end(9504,59);routeUIKitTouch(9504,SourceTouchEnded,true);
+    record(@"held_tab_survives_scoreboard_and_releases",tabKept && keyboardOwners.empty() && owners.empty() && probe.keyboard.size()==2 && !probe.keyboard.back().second,@{});
     // Restore every real routing object, aggregate state and metric. Neither
     // actual Source callbacks nor framework touch input was used by the test.
     controls=std::move(savedControls);callbacks=savedCallbacks;callbackUser=savedUser;
+    lookSampleCallback=savedLookSampleCallback;
+    keyboardSink=savedKeyboardSink;keyboardOwners=std::move(savedKeyboardOwners);
     uikitRoutes=std::move(savedUIKitRoutes);
     owners.clear();moveOwner=savedMoveOwner;lookOwner=savedLookOwner;
     std::memcpy(actionOwners,savedActionOwners,sizeof(actionOwners));
     lookSamples=savedLookSamples;cancellations=savedCancels;lookDX=savedDX;lookDY=savedDY;
+    moveX=savedMoveX;moveY=savedMoveY;
     return copyJSON(@{@"status":passed?@"passed":@"failed",@"scope":@"same real router / actual layout / synthetic coordinates / no fabricated UITouch",@"cases":cases});
 }
 

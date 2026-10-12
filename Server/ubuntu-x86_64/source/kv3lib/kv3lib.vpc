@@ -1,0 +1,66 @@
+//-----------------------------------------------------------------------------
+//	KV3LIB.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Conditional STRICT_TYPE_CONVERSION_WARNINGS_ACTIVE	"true"
+
+$Macro SRCDIR		".."
+
+$include "$SRCDIR\vpc_scripts\source_lib_base.vpc"
+
+$Conditional KV3_CSGO "1"
+$Conditional KV3_COMPILETIME_PROFILE "0"
+
+$Project "kv3lib"
+{
+	$Folder	"Source Files"
+	{
+	    $File "keyvalues3.cpp"
+	    $File "keyvalues3_oldschematext.cpp"
+	    $File "keyvalues3_textreader.cpp"
+	    $File "keyvalues3_textwriter.cpp"
+	    $File "keyvalues3_binaryreader.cpp"
+	    $File "keyvalues3_binarywriter.cpp"
+	    $File "keyvalues3_kv1textreader.cpp"
+	    $File "keyvalues3_kv1textwriter.cpp"
+
+	    $File "kv3transfer.cpp"
+
+	    $File "kv3schemahelpers.cpp"
+	    
+		$File "kv3format_manager.cpp"
+		$File "kv3formats.cpp"
+	}
+
+	$Folder	"Header Files"
+	{
+		$File	"kv3format_manager.h"
+
+		$File	"$SRCDIR/public/kv3lib/keyvalues3.h"
+		$File	"$SRCDIR/public/kv3lib/kv3formats.h"
+		$File	"$SRCDIR/public/kv3lib/kv3transfer.h"
+		$File	"$SRCDIR/public/kv3lib/kv3transfer_constants.h"
+		$File	"$SRCDIR/public/kv3lib/kv3transfer_schema.h"
+		$File	"$SRCDIR/public/kv3lib/kv3transfer_resource.h"
+		$File	"$SRCDIR/public/kv3lib/kv3transfer_saveloadresource.h"
+
+		$File	"$SRCDIR/public/kv3lib/kv3schemahelpers.h"
+	}
+
+    $Folder "Source2 KV3 Dependencies" [$KV3_CSGO]
+    {
+		$File	"$SRCDIR/public/kv3lib/blockcompress.h"
+		$File	"$SRCDIR/kv3lib/blockcompress.cpp"
+
+		$File	"$SRCDIR/public/kv3lib/utltokenizer.h"
+		$File	"$SRCDIR/kv3lib/utltokenizer.cpp"
+	}
+
+	$Folder "Compiler Profiler" [$KV3_COMPILETIME_PROFILE]
+	{
+		$File	"$SRCDIR/kv3lib/compiletimehashprofiler.cpp"
+		$File	"$SRCDIR/kv3lib/compiletimehashprofiler_strings.inc"
+	}
+}

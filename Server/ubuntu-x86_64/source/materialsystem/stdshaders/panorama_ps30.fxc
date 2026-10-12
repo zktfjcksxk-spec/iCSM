@@ -1,0 +1,189 @@
+// DYNAMIC: "D_TEX2DFASTBLUR" "0..8"
+// DYNAMIC: "D_TEX2DBLUR" "0..1"
+// DYNAMIC: "D_TEX2DPARTICLE" "0..1"
+// DYNAMIC: "D_TEX2DDOWNSAMPLE" "0..1"
+
+#include "common_ps_fxc.h"
+
+sampler g_tTexture0 : register( s0 );
+
+struct PS_INPUT
+{
+	float4 vTex : TEXCOORD0;
+	float4 vTex1 : TEXCOORD1;
+	float4 vColor : TEXCOORD2;
+};
+
+struct PS_OUTPUT
+{
+	float4 vColor;
+};
+
+float g_flCenterWeight	: register( c0 );
+float4 g_vSample1		: register( c1 );
+float4 g_vSample2		: register( c2 );
+float4 g_vSample3		: register( c3 );
+float4 g_vSample4		: register( c4 );
+float4 g_vSample5		: register( c5 );
+float4 g_vSample6		: register( c6 );
+float4 g_vSample7		: register( c7 );
+float4 g_vSample8		: register( c8 );
+
+float2 g_vBlurMultiplyVec	: register( c9 );
+float g_flBlurSigma			: register( c10 );
+float g_flParticleSharpness : register( c11 );
+
+float4 g_UVClamp : register(c12);
+
+static const float g_flNumBlurPixelsPerSide = 4.0;
+static const float g_flPI = 3.1415926535;
+
+
+float IsInsideRectangleAA( float2 v, float2 bottomLeft, float2 topRight )
+{
+	float2 s = step( bottomLeft, v ) - step( topRight, v );
+	return s.x * s.y;
+}
+
+
+float IsInsideQuad( float2 v, float3 v0, float3 v1, float3 v2, float3 v3 )
+{
+	float3 pt = float3( v.x, v.y, 0 );
+
+	float3 c0 = cross( pt - v0, v1 - v0 );
+	float3 c1 = cross( pt - v1, v2 - v1 );
+	float3 c2 = cross( pt - v2, v3 - v2 );
+	float3 c3 = cross( pt - v3, v0 - v3 );
+
+	float s0 = step( 0, c0.z );
+	float s1 = step( 0, c1.z );
+	float s2 = step( 0, c2.z );
+	float s3 = step( 0, c3.z );
+
+	return s0*s1*s2*s3;
+}
+
+#define Tex2D tex2D
+
+float4_color_return_type main( PS_INPUT i ) : COLOR
+{
+	PS_OUTPUT o;
+
+	o.vColor = float4( 0.0, 0.0, 0.0, 0.0 );
+
+	#if ( D_TEX2DFASTBLUR )
+	{
+		float4 vColor = g_flCenterWeight * Tex2D( g_tTexture0, i.vTex.xy );
+
+		vColor += g_vSample1.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample1.xy );
+		vColor += g_vSample1.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample1.xy );
+
+		#if ( D_TEX2DFASTBLUR >= 2 )
+		{
+			vColor += g_vSample2.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample2.xy );
+			vColor += g_vSample2.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample2.xy );
+
+			#if ( D_TEX2DFASTBLUR >= 3 )
+			{
+				vColor += g_vSample3.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample3.xy );
+				vColor += g_vSample3.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample3.xy );
+
+				#if ( D_TEX2DFASTBLUR >= 4 )
+				{
+					vColor += g_vSample4.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample4.xy );
+					vColor += g_vSample4.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample4.xy );
+
+					#if ( D_TEX2DFASTBLUR >= 5 )
+					{
+						vColor += g_vSample5.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample5.xy );
+						vColor += g_vSample5.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample5.xy );
+
+						#if ( D_TEX2DFASTBLUR >= 6 )
+						{
+							vColor += g_vSample6.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample6.xy );
+							vColor += g_vSample6.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample6.xy );
+
+							#if ( D_TEX2DFASTBLUR >= 7 )
+							{
+								vColor += g_vSample7.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample7.xy );
+								vColor += g_vSample7.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample7.xy );
+
+								#if ( D_TEX2DFASTBLUR >= 8 )
+								{
+									vColor += g_vSample8.z * Tex2D( g_tTexture0, i.vTex.xy + g_vSample8.xy );
+									vColor += g_vSample8.z * Tex2D( g_tTexture0, i.vTex.xy - g_vSample8.xy );
+								}
+								#endif
+							}
+							#endif
+						}
+						#endif
+					}
+					#endif
+				}
+				#endif
+			}
+			#endif
+		}
+		#endif
+
+		o.vColor = vColor;
+	}
+	#elif ( D_TEX2DBLUR )
+	{
+		float3 incrementalGaussian;
+		incrementalGaussian.x = 1.0 / ( sqrt( 2.0 * g_flPI ) * g_flBlurSigma );
+		incrementalGaussian.y = exp( -0.5 / ( g_flBlurSigma * g_flBlurSigma ) );
+		incrementalGaussian.z = incrementalGaussian.y * incrementalGaussian.y;
+
+		float4 avgValue = float4( 0.0, 0.0, 0.0, 0.0 );
+		float coefficientSum = 0.0;
+
+		// Take the central sample first...
+		avgValue += Tex2D( g_tTexture0, i.vTex.xy ) * incrementalGaussian.x;
+		coefficientSum += incrementalGaussian.x;
+		incrementalGaussian.xy *= incrementalGaussian.yz;
+
+		// Go through the remaining 8 vertical samples (4 on each side of the center)
+		for ( float flLoop = 1.0; flLoop <= g_flNumBlurPixelsPerSide; flLoop = flLoop + 1.0 )
+		{
+			avgValue += Tex2D( g_tTexture0, min( i.vTex.xy - flLoop * g_vBlurMultiplyVec, g_UVClamp.xy) ) * incrementalGaussian.x;
+			avgValue += Tex2D( g_tTexture0, min( i.vTex.xy + flLoop * g_vBlurMultiplyVec, g_UVClamp.xy) ) * incrementalGaussian.x;
+
+			coefficientSum += 2.0 * incrementalGaussian.x;
+			incrementalGaussian.xy *= incrementalGaussian.yz;
+		}
+
+		o.vColor = avgValue / coefficientSum;
+	}
+	#elif ( D_TEX2DPARTICLE )
+	{
+		float2 uv = i.vTex.xy - 0.5;
+
+		float radius = sqrt( dot( uv, uv ) );
+
+		float flSharpRadius = ( clamp( g_flParticleSharpness, 0.0, 0.98 ) ) / 2.0; 
+		float alpha = 1.0; 
+		if ( radius < flSharpRadius )
+		{
+			alpha = 1.0;
+		}
+		else
+		{
+			alpha = clamp( ( 1.0 - ( ( radius - flSharpRadius ) / ( 0.5 - flSharpRadius ) ) ), 0.0, 1.0 );
+		}
+
+		o.vColor.r = i.vColor.r * i.vColor.a * alpha;
+		o.vColor.g = i.vColor.g * i.vColor.a * alpha;
+		o.vColor.b = i.vColor.b * i.vColor.a * alpha;
+		o.vColor.a = i.vColor.a * alpha;
+	}
+	#elif ( D_TEX2DDOWNSAMPLE )
+	{
+        float2 clamped = min( i.vTex.xy, g_UVClamp.xy);
+        o.vColor = Tex2D(g_tTexture0, clamped.xy );
+	}
+	#endif
+
+	return FinalOutput( o.vColor, 0, PIXEL_FOG_TYPE_NONE, TONEMAP_SCALE_NONE );
+}

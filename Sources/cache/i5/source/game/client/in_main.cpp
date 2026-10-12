@@ -1110,6 +1110,9 @@ Moves the local angle positions
 */
 void CInput::AdjustAngles ( int nSlot, float frametime )
 {
+#if defined(SOURCE_IOS)
+    I5Touch::TraceControllerInput(0,nSlot,NULL);
+#endif
 	float	speed;
 	QAngle viewangles;
 	
@@ -1139,6 +1142,13 @@ void CInput::AdjustAngles ( int nSlot, float frametime )
 
 	// Adjust PITCH if keyboard looking
 	AdjustPitch( nSlot, speed, viewangles );
+#if defined(SOURCE_IOS)
+    static double nextKeyAngleTrace=0;
+    if(I5Touch::ICSMControllerTraceActive() && Plat_FloatTime()>=nextKeyAngleTrace) {
+        nextKeyAngleTrace=Plat_FloatTime()+0.1;
+        Msg("ICSM_CONTROLLER_KEY_ANGLE yaw=%g pitch=%g\n",viewangles[YAW],viewangles[PITCH]);
+    }
+#endif
 	
 	// Make sure values are legitimate
 	ClampAngles( viewangles );
@@ -1301,6 +1311,9 @@ ControllerMove
 */
 void CInput::ControllerMove( int nSlot, float frametime, CUserCmd *cmd )
 {
+#if defined(SOURCE_IOS)
+    I5Touch::TraceControllerInput(2,nSlot,cmd);
+#endif
 	ConVarRef cl_mouseenable( "cl_mouseenable" );
 
 	if ( (IsPC() || IsPlatformPS3()) && 
@@ -1314,11 +1327,19 @@ void CInput::ControllerMove( int nSlot, float frametime, CUserCmd *cmd )
 		}
 	}
 
+#if defined(SOURCE_IOS)
+    I5Touch::TraceControllerInput(3,nSlot,cmd);
+#endif
 	JoyStickMove( frametime, cmd);
+#if defined(SOURCE_IOS)
+    I5Touch::TraceControllerInput(4,nSlot,cmd);
+#endif
 
 	SteamControllerMove( frametime, cmd );
 #if defined(SOURCE_IOS)
+    I5Touch::TraceControllerInput(5,nSlot,cmd);
     I5Touch::ControllerMove( nSlot, cmd );
+    I5Touch::TraceControllerInput(6,nSlot,cmd);
 #endif
 }
 

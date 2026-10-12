@@ -1,0 +1,16 @@
+//====== Copyright Valve Corporation, All rights reserved. ====================
+
+#ifndef STEAMNETWORKINGSOCKES_CONFIG
+#define STEAMNETWORKINGSOCKES_CONFIG
+
+#include <tier0/platform.h>
+
+#if defined( STEAMDATAGRAMLIB_STATIC_LINK )
+	#define STEAMNETWORKINGSOCKETS_INTERFACE extern
+#elif defined( STEAMDATAGRAMLIB_FOREXPORT )
+	#define STEAMNETWORKINGSOCKETS_INTERFACE DLL_EXPORT
+#else
+	#define STEAMNETWORKINGSOCKETS_INTERFACE DLL_IMPORT
+#endif
+
+#endif // #ifndef STEAMNETWORKINGSOCKETS_CONFIG

@@ -1,0 +1,170 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// DYNAMIC:	"DZONE"				"0..1"
+// DYNAMIC:	"NEARBYPLAYERS"		"0..6"
+
+#include "common_fog_vs_fxc.h"
+#include "common_vs_fxc.h"
+
+const float4 vConst0						: register(SHADER_SPECIFIC_CONST_0);
+#define g_time vConst0.x
+#define g_scale vConst0.y
+
+const float4 vConst3						: register(SHADER_SPECIFIC_CONST_3);
+#define g_dzCenter vConst3.xyz
+#define g_dzRadius vConst3.w
+
+
+// -------------------------------------------
+#if ( NEARBYPLAYERS > 0 )
+#define g_flProxCrushMax 80.0f
+#define g_flProxCrushMin -10.0f
+const float4 vConst2						: register(SHADER_SPECIFIC_CONST_4);
+#define g_vPlayer0pos vConst2.xyz
+#define g_vPlayer0amt vConst2.w
+#endif
+#if ( NEARBYPLAYERS > 1 )
+const float4 vConst4						: register(SHADER_SPECIFIC_CONST_5);
+#define g_vPlayer1pos vConst4.xyz
+#define g_vPlayer1amt vConst4.w
+#endif
+#if ( NEARBYPLAYERS > 2 )
+const float4 vConst5						: register(SHADER_SPECIFIC_CONST_6);
+#define g_vPlayer2pos vConst5.xyz
+#define g_vPlayer2amt vConst5.w
+#endif
+#if ( NEARBYPLAYERS > 3 )
+const float4 vConst6						: register(SHADER_SPECIFIC_CONST_10);
+#define g_vPlayer3pos vConst6.xyz
+#define g_vPlayer3amt vConst6.w
+#endif
+#if ( NEARBYPLAYERS > 4 )
+const float4 vConst10						: register(SHADER_SPECIFIC_CONST_12);
+#define g_vPlayer4pos vConst10.xyz
+#define g_vPlayer4amt vConst10.w
+#endif
+#if ( NEARBYPLAYERS > 5 )
+const float4 vConst11						: register(c217); // VERTEX_SHADER_SHADER_SPECIFIC_CONST_13
+#define g_vPlayer5pos vConst11.xyz
+#define g_vPlayer5amt vConst11.w
+#endif
+// -------------------------------------------
+
+
+static const int g_FogType			= DOWATERFOG;
+
+struct VS_INPUT
+{
+	float4 vPos				: POSITION;
+	float4 vColor			: COLOR0;
+	float4 vTexCoord0		: TEXCOORD0;
+	//float4 vTexCoord1		: TEXCOORD1;
+};
+
+struct VS_OUTPUT
+{
+    float4 projPos					: POSITION;			// Projection-space position
+	float2 baseTexCoord				: TEXCOORD0;		// Base texture coordinate
+	float4 color					: TEXCOORD2;		// Vertex color (from lighting or unlit)
+
+#if !defined( _X360 ) && !defined( SHADER_MODEL_VS_3_0 )
+	float  fog		: FOG;
+#endif
+
+	float4 worldPos_projPosZ		: TEXCOORD7;		// Necessary for pixel fog
+};
+
+
+VS_OUTPUT main( const VS_INPUT v )
+{
+	VS_OUTPUT o = ( VS_OUTPUT )0;
+
+	float3 worldPos;
+	worldPos = mul( v.vPos, cModel[0] );
+	
+	
+// -------------------------------------------
+	float flPlayerProximityAmt = 1.0f;
+	#if ( NEARBYPLAYERS > 0 )
+	flPlayerProximityAmt = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer0pos - worldPos ) - g_vPlayer0amt );
+	#endif
+	#if ( NEARBYPLAYERS > 1 )
+	flPlayerProximityAmt = min( flPlayerProximityAmt, smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer1pos - worldPos ) - g_vPlayer1amt ) );
+	#endif
+	#if ( NEARBYPLAYERS > 2 )
+	flPlayerProximityAmt = min( flPlayerProximityAmt, smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer2pos - worldPos ) - g_vPlayer2amt ) );
+	#endif
+	#if ( NEARBYPLAYERS > 3 )
+	flPlayerProximityAmt = min( flPlayerProximityAmt, smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer3pos - worldPos ) - g_vPlayer3amt ) );
+	#endif
+	#if ( NEARBYPLAYERS > 4 )
+	flPlayerProximityAmt = min( flPlayerProximityAmt, smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer4pos - worldPos ) - g_vPlayer4amt ) );
+	#endif
+	#if ( NEARBYPLAYERS > 5 )
+	flPlayerProximityAmt = min( flPlayerProximityAmt, smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( g_vPlayer5pos - worldPos ) - g_vPlayer5amt ) );
+	#endif
+// -------------------------------------------
+	
+	
+	float3 v2p = worldPos - cEyePos;
+	float l = length(v2p);
+	
+	float3 up = float3(0,0,1);
+	float3 right = normalize(cross(up, normalize(v2p)));
+	
+	float flScale = g_scale + smoothstep( 1000, 3000, l );
+	float flCrush = smoothstep( 20, 60, l );
+
+	
+	#if ( NEARBYPLAYERS > 0 )
+	flCrush *= flPlayerProximityAmt;	
+	#endif
+	
+	#if ( DZONE == 1 )
+		float flDzone = smoothstep( g_dzRadius + 30, g_dzRadius - 30, length( worldPos - g_dzCenter ) );
+		flScale *= flDzone;
+	#endif
+
+	worldPos.z -= v.vTexCoord0.w * flScale * flCrush;
+	worldPos.xy -= right.xy * v.vTexCoord0.z * flScale;
+
+	float flZscale = (v.vTexCoord0.w * -0.01f);
+	
+	float flRipple = 8 * flZscale * (sin( g_time + worldPos.x ) + sin( 2 * g_time + worldPos.y ));
+	worldPos.xy -= right.xy * flRipple;
+	
+	float flWind = flZscale * (sin( g_time + worldPos.x * 0.005f ) + sin(  1.5f * g_time + worldPos.y * 0.003f ));
+	worldPos.xy -= flWind * 2;
+	
+	// Transform into projection space
+	o.projPos = mul( float4( worldPos, 1 ), cViewProj );
+	o.worldPos_projPosZ = float4( worldPos.xyz, o.projPos.z );
+	
+#if !defined( _X360 ) && !defined( SHADER_MODEL_VS_3_0 )
+	o.fog = CalcFixedFunctionFog( worldPos, g_FogType );
+#endif
+	
+	o.color.rgba = v.vColor.rgba;
+	
+	#if ( DZONE == 1 )
+		o.color.r += 1.0f - flDzone;
+		o.color.rgb *= flDzone * flDzone;
+	#endif
+	
+	o.color.rgb += flWind;
+	
+	// darken bottom of grass - TODO: make material params
+	o.color.rgb *= 2.0f * saturate( pow( flZscale, 0.01 ) + 0.6 );
+	
+	//#if ( NEARBYPLAYERS > 0 )
+	//o.color.gb = 0;
+	//o.color.r = 1.0f - flPlayerProximityAmt;	
+	//#endif
+	
+	// Base texture coordinates
+	o.baseTexCoord.xy = v.vTexCoord0.xy;
+
+	return o;
+}
+
+

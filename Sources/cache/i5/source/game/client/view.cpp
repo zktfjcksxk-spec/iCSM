@@ -113,7 +113,12 @@ ConVar v_viewmodel_fov( "viewmodel_fov", "54", FCVAR_ARCHIVE );
 ConVar mat_viewportscale( "mat_viewportscale", "1.0", FCVAR_CHEAT, "Scale down the main viewport (to reduce GPU impact on CPU profiling)",
 								  true, (1.0f / 640.0f), true, 1.0f );
 ConVar mat_viewportupscale( "mat_viewportupscale", "1", FCVAR_CHEAT, "Scale the viewport back up" );
-ConVar icsm_scene_render_percent( "icsm_scene_render_percent", "75", FCVAR_ARCHIVE, "iCSM 3D scene resolution percentage; HUD remains unscaled", true, 50.0f, true, 100.0f );
+#include "scene_resolution_policy.h"
+ConVar icsm_scene_render_percent( "icsm_scene_render_percent", "75", FCVAR_ARCHIVE, "iCSM 3D percentage of the preset scene output; UI remains native", true, 50.0f, true, 100.0f );
+ConVar icsm_scene_output_width( "icsm_scene_output_width", "0", FCVAR_DONTRECORD,
+    "Preset scene output width, independent of the native UI canvas.", true, 0, true, 16384 );
+ConVar icsm_scene_output_height( "icsm_scene_output_height", "0", FCVAR_DONTRECORD,
+    "Preset scene output height, independent of the native UI canvas.", true, 0, true, 16384 );
 ConVar cl_leveloverview( "cl_leveloverview", "0", FCVAR_CHEAT );
 
 ConVar r_mapextents( "r_mapextents", "16384", FCVAR_CHEAT, 
@@ -1109,8 +1114,21 @@ void CViewRender::Render( vrect_t *rect )
 		view.m_nUnscaledHeight = view.height;
 
 
-		view.width *= flViewportScale;
-		view.height *= flViewportScale;
+#if defined(SOURCE_IOS)
+        const ICSMDisplay::SceneResolution scene = ICSMDisplay::ScenePlan(
+            {unsigned(icsm_scene_output_width.GetInt()), unsigned(icsm_scene_output_height.GetInt())},
+            flViewportScale * 100.0f, {unsigned(view.width), unsigned(view.height)});
+        if ( scene.input.width && scene.input.height && !VGui_IsSplitScreen() )
+        {
+            view.width = scene.input.width;
+            view.height = scene.input.height;
+        }
+        else
+#endif
+        {
+            view.width *= flViewportScale;
+            view.height *= flViewportScale;
+        }
 		if ( IsGameConsole() )
 		{
 			// view must be compliant to resolve restrictions

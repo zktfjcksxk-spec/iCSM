@@ -1,0 +1,49 @@
+//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
+//
+// Purpose: 
+//
+// $NoKeywords: $
+//=============================================================================//
+
+#ifndef CS_VIEW_SCENE_H
+#define CS_VIEW_SCENE_H
+#ifdef _WIN32
+#pragma once
+#endif
+
+#include "viewrender.h"
+
+//-----------------------------------------------------------------------------
+// Purpose: Implements the interview to view rendering for the client .dll
+//-----------------------------------------------------------------------------
+class CCSViewRender : public CViewRender
+{
+public:
+	CCSViewRender();
+
+	virtual void Init( void );
+
+	virtual void Render2DEffectsPreViewmodel( const CViewSetup &view );
+	virtual void Render2DEffectsPreHUD( const CViewSetup &view );
+	virtual void Render2DEffectsPostHUD( const CViewSetup &view );
+	virtual void RenderPlayerSprites( void );
+	virtual void RenderSmokeOverlay( bool bPreViewModel = true );
+
+private:
+
+	void PerformFlashbangEffect( const CViewSetup &view );
+	void PerformNightVisionEffect( const CViewSetup &view );
+	void PerformHealthBoostEffect( const CViewSetup &view );
+	void PerformDangerZoneEffect( const CViewSetup &view );
+	void PerformScreenTearEffect( const CViewSetup &view );
+	void PerformMotionBlurEffect( void );
+	void PerformParachuteScreenEffect( const CViewSetup &view );
+
+	ITexture *m_pFlashTexture;
+	ITexture *m_pScreenTearTexture;
+
+	bool m_bInDangerZone = false;
+	float m_flLastInZoneTimeChange;
+};
+
+#endif //CS_VIEW_SCENE_H

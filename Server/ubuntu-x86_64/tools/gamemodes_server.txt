@@ -1,0 +1,36 @@
+// Custom map group, following the original gamemodes_server.txt.example.
+"GameModes_Server.txt"
+{
+    "gameTypes"
+    {
+        "classic"
+        {
+            "gameModes"
+            {
+                "competitive"
+                {
+                    "mapgroupsMP"
+                    {
+                        "mg_icsm_competitive" ""
+                    }
+                }
+            }
+        }
+    }
+    "mapGroups"
+    {
+        "mg_icsm_competitive"
+        {
+            "name" "mg_icsm_competitive"
+            "nameID" "iCSM Classic Rotation"
+            "imagename" "mapgroup-de_mirage"
+            "maps"
+            {
+                "de_mirage" ""
+                "de_inferno" ""
+                "de_dust2" ""
+                "de_vertigo" ""
+            }
+        }
+    }
+}

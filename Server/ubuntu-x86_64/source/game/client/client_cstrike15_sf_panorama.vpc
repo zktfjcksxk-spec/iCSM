@@ -1,0 +1,36 @@
+//-----------------------------------------------------------------------------
+//	CLIENT_CSTRIKE15_PANORAMA.VPC
+//
+//
+// ***   KEEP IN SYNC WITH client_cstrike15.vpc   ***
+//
+//
+//-----------------------------------------------------------------------------
+
+
+// We have three client dll's: Scaleform, Panorama, and both
+// See comment at start of client_cstrike15.vpc for details of refactor of client-related vpc's
+	
+
+$Macro SRCDIR		"..\.."
+$Macro GAMENAME 	"csgo"
+
+// Uncomment this to make CEG the default.
+//$Macro CEG "1" [!$NO_CEG]
+
+$Macro OUTBINDIR	"$SRCDIR\..\game\$GAMENAME\bin"
+$Macro OUTCEGDIR	"$SRCDIR\..\game\$GAMENAME\bin\ceg"		[$WINDOWS && $CEG]
+$Macro DEVKITBINDIR	"$GAMENAME\bin"							[$X360]
+
+$Macro PROJNAME		"Client_Sf_Panorama (CSGO)"
+$Macro OUTBINNAME	"client_sf_panorama"
+$Macro GENERATED_PROTO_DIR	"$SRCDIR\game\$OUTBINNAME\generated_proto"
+
+$include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+
+// Hybrid client
+$Conditional INCLUDE_SCALEFORM "1"
+$Conditional PANORAMA_ENABLE   "1"	[ ( $WIN32 || $OSXALL || ( $LINUX && !$DEDICATED ) ) && $CSTRIKE_TRUNK_BUILD ]
+
+$Include "$SRCDIR\game\client\client_cstrike15_inc.vpc"
+

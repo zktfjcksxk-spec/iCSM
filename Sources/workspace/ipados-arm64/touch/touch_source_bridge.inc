@@ -3,6 +3,11 @@
    original client context applies edges and constructs CUserCmds. */
 
 #include "display_policy.h"
+#include "scene_resolution_policy.h"
+#include "touch_aim_policy.h"
+#include "cstrike15/panorama/popups/csgo_settings_slider.h"
+#include "panorama/controls/slider.h"
+#include <dlfcn.h>
 namespace I5Touch
 {
 enum EventType { ActionEvent, MoveEvent, LookEvent, CommandEvent, WeaponEvent, ResetEvent };
@@ -14,8 +19,9 @@ struct Event
     float x, y;
     double timestamp;
     unsigned epoch;
+    double sampleInterval;
 };
-struct LookSample { float x, y; double timestamp; };
+struct LookSample { float x, y; double timestamp, interval; };
 static const unsigned kCapacity = 16384;
 static Event s_events[kCapacity];
 static unsigned s_read = 0, s_write = 0, s_epoch = 0;
@@ -36,13 +42,43 @@ static CUserCmd s_lastExtraCommand;
 static unsigned s_realCommands = 0, s_extraCommands = 0, s_actionEdges = 0;
 
 // These are degrees per logical UIKit point.  They intentionally do not use
-// mouse sensitivity, m_yaw/m_pitch, FOV scaling, acceleration or frame time.
+// mouse sensitivity, m_yaw/m_pitch, FOV scaling or frame time. Optional native
+// sensitivity/velocity gain below uses only actual touch sample timing.
 static ConVar touch_yaw_degrees_per_point( "touch_yaw_degrees_per_point", "0.25",
     FCVAR_ARCHIVE, "Native touch yaw degrees per UIKit point; linear, no acceleration.", true, 0.001f, true, 5.0f );
 static ConVar touch_pitch_degrees_per_point( "touch_pitch_degrees_per_point", "0.25",
     FCVAR_ARCHIVE, "Native touch pitch degrees per UIKit point; linear, no acceleration.", true, 0.001f, true, 5.0f );
 static ConVar touch_input_debug( "touch_input_debug", "0", 0,
     "Log native touch actions and applied look totals." );
+static ConVar icsm_touch_aim_mode( "icsm_touch_aim_mode", "0", FCVAR_ARCHIVE,
+    "Touch aim: 0=fixed speed, 1=actual finger velocity acceleration (up to 2x).", true, 0, true, 1 );
+static ConVar icsm_touch_hide_buttons( "icsm_touch_hide_buttons", "0", FCVAR_ARCHIVE,
+    "Hide native gameplay touch buttons and their hit targets; preserve swipe and menu input.", true, 0, true, 1 );
+static ConVar icsm_touch_sensitivity( "icsm_touch_sensitivity", "1", FCVAR_ARCHIVE,
+    "Overall native touch aim multiplier, including firing.", true, 0.1f, true, 3.0f );
+static ConVar icsm_touch_rifle_scope_sensitivity( "icsm_touch_rifle_scope_sensitivity", "1", FCVAR_ARCHIVE,
+    "AUG/SG553 scoped touch multiplier relative to overall sensitivity, including firing.", true, 0.1f, true, 3.0f );
+static ConVar icsm_touch_sniper_scope_sensitivity( "icsm_touch_sniper_scope_sensitivity", "1", FCVAR_ARCHIVE,
+    "Sniper scoped touch multiplier relative to overall sensitivity, including firing.", true, 0.1f, true, 3.0f );
+static ICSMTouchAim::Delta s_lastAim = {0, 0, 1, 1};
+
+#include "controller_settings.inc"
+#include "controller_source_trace.inc"
+
+static ICSMTouchAim::Settings AimSettings() {
+    ICSMTouchAim::Settings result = {icsm_touch_aim_mode.GetInt(),
+        icsm_touch_sensitivity.GetFloat(), icsm_touch_rifle_scope_sensitivity.GetFloat(),
+        icsm_touch_sniper_scope_sensitivity.GetFloat()};
+    return result;
+}
+static ICSMTouchAim::Scope AimScope() {
+    C_CSPlayer *player = C_CSPlayer::GetLocalCSPlayer();
+    C_WeaponCSBase *weapon = player ? player->GetActiveCSWeapon() : NULL;
+    if (!weapon) return ICSMTouchAim::Unscoped;
+    return ICSMTouchAim::SelectScope(player->m_bIsScoped,
+        weapon->GetCSWeaponID() == WEAPON_AUG || weapon->GetCSWeaponID() == WEAPON_SG556,
+        weapon->GetWeaponType() == WEAPONTYPE_SNIPER_RIFLE);
+}
 
 // Original fps_max and fps_max_menu are not archived. Keep the UI choice in
 // an archived client ConVar and apply both original engine limiters.
@@ -56,7 +92,9 @@ static void ApplyFrameRateLimit( int limit )
     ConVarRef game( "fps_max", true ), menu( "fps_max_menu", true );
     if ( !game.IsValid() || !menu.IsValid() ) return;
     game.SetValue( limit );
-    menu.SetValue( limit );
+    // Static lobby imagery does not need the match's 90/120 Hz scene cadence.
+    // Native UIKit controls retain their independent system animation rate.
+    menu.SetValue( MIN(limit,60) );
     Msg( "ICSM_FPS_LIMIT selected=%d game=%d menu=%d\n", limit, game.GetInt(), menu.GetInt() );
 }
 
@@ -136,7 +174,7 @@ static void ReleaseGameActions()
     ++s_resets;
 }
 
-static void Enqueue( EventType type, int code, int value, float x, float y, double timestamp )
+static void Enqueue( EventType type, int code, int value, float x, float y, double timestamp, double interval = 0 )
 {
     if ( s_write - s_read >= kCapacity )
     {
@@ -147,7 +185,7 @@ static void Enqueue( EventType type, int code, int value, float x, float y, doub
         s_events[s_write++ % kCapacity] = reset;
         Warning( "I5_TOUCH queue overflow: reset pending input\n" );
     }
-    Event event = { type, code, value, x, y, timestamp, s_epoch };
+    Event event = { type, code, value, x, y, timestamp, s_epoch, interval };
     s_events[s_write++ % kCapacity] = event;
 }
 
@@ -157,6 +195,8 @@ static void MoveCallback( void *, float x, float y, double time )
 { Enqueue( MoveEvent, 0, 0, x, y, time ); }
 static void LookCallback( void *, float x, float y, double time )
 { Enqueue( LookEvent, 0, 0, x, y, time ); }
+static void LookSampleCallback( void *, float x, float y, double time, double interval )
+{ Enqueue( LookEvent, 0, 0, x, y, time, interval ); }
 static void CommandCallback( void *, SourceTouchCommand command, double time )
 { Enqueue( CommandEvent, command, 0, 0, 0, time ); }
 static void WeaponCallback( void *, int entity, int subtype, double time )
@@ -482,20 +522,74 @@ static void SettingsScrollCallback( const char *tabID, float pixels )
         scroll->SetScrollWindowPosition( pixels * pane->GetParentWindow()->GetSurfaceHeight() / height, true );
 }
 
-static void PublishSettingsSliders( panorama::IUIPanel *panel, SourceTouchSettingsState &settings, int width, int height )
+static panorama::CSlider *SettingsSliderControl( panorama::IUIPanel *panel )
+{
+    panorama::IUIPanel *inner = panel ? panel->FindChildTraverse( "Slider" ) : NULL;
+    return inner && !V_strcmp( inner->GetPanelType().String(), "Slider" ) ?
+        static_cast<panorama::CSlider *>( inner->ClientPtr() ) : NULL;
+}
+
+static panorama::CSlider *FindSettingsSlider( panorama::IUIPanel *panel, const char *convar )
+{
+    if ( !panel || !panel->BIsVisible() || !panel->IsEnabled() ) return NULL;
+    if ( !V_strcmp( panel->GetPanelType().String(), "CSGOSettingsSlider" ) )
+    {
+        CSGO_SettingsSlider *setting = static_cast<CSGO_SettingsSlider *>( panel->ClientPtr() );
+        ConVarRef &var = setting->GetConVarRef();
+        if ( var.IsValid() && !V_strcmp( var.GetName(), convar ) ) return SettingsSliderControl( panel );
+    }
+    for ( int i = 0; i < panel->GetChildCount(); ++i )
+        if ( panorama::CSlider *slider = FindSettingsSlider( panel->GetChild( i ), convar ) ) return slider;
+    return NULL;
+}
+
+static void SettingsSliderCallback( const char *tabID, const char *convar, float fraction, bool finished )
+{
+    panorama::IUIPanel *pane = s_initialized ? ActiveSettingsViewport() : NULL;
+    if ( !pane || !pane->GetParent() || !tabID || !convar ||
+         V_strcmp( pane->GetParent()->GetID(), tabID ) || !IsFinite( fraction ) ) return;
+    panorama::CSlider *slider = FindSettingsSlider( pane, convar );
+    if ( !slider ) return;
+    // CSlider::SetValue emits the original SliderValueChanged event. Its
+    // CSGOSettingsSlider parent owns ConVar range mapping, inversion and labels.
+    slider->SetValue( Lerp( clamp( fraction, 0.0f, 1.0f ), slider->GetMin(), slider->GetMax() ) );
+    if ( finished ) engine->ClientCmd_Unrestricted( "host_writeconfig\n", true );
+}
+
+static void PublishSettingsSliders( panorama::IUIPanel *panel, SourceTouchSettingsState &settings,
+                                   SourceTouchSettingsSliderTargets &targets, int width, int height )
 {
     if ( !panel || !panel->BIsVisible() || !panel->IsEnabled() ) return;
     if ( !V_strcmp( panel->GetPanelType().String(), "CSGOSettingsSlider" ) && settings.slider_count < SOURCE_SETTINGS_SLIDER_LIMIT )
     {
         SourceTouchRect rect = MapPanelRect( panel, width, height );
         if ( rect.width > 0 && rect.height > 0 ) settings.sliders[settings.slider_count++] = rect;
+        CSGO_SettingsSlider *setting = static_cast<CSGO_SettingsSlider *>( panel->ClientPtr() );
+        panorama::CSlider *slider = SettingsSliderControl( panel );
+        panorama::IUIPanel *inner = panel->FindChildTraverse( "Slider" );
+        panorama::IUIPanel *track = inner ? inner->FindChildTraverse( "SliderTrack" ) : NULL;
+        panorama::IUIPanel *thumb = inner ? inner->FindChildTraverse( "SliderThumb" ) : NULL;
+        ConVarRef &var = setting->GetConVarRef();
+        if ( slider && track && thumb && var.IsValid() && targets.count < SOURCE_SETTINGS_SLIDER_LIMIT )
+        {
+            SourceTouchSettingsSlider target = {};
+            target.hit_bounds = MapPanelRect( inner, width, height );
+            target.track_bounds = MapPanelRect( track, width, height );
+            target.thumb_width = thumb->GetActualRenderWidth() * width / float( panel->GetParentWindow()->GetSurfaceWidth() );
+            float range = slider->GetMax() - slider->GetMin();
+            target.fraction = range > 0 ? clamp( ( slider->GetValue() - slider->GetMin() ) / range, 0.0f, 1.0f ) : 0;
+            V_strncpy( target.convar, var.GetName(), sizeof( target.convar ) );
+            if ( target.hit_bounds.height > 0 && target.track_bounds.width > target.thumb_width && target.thumb_width > 0 )
+                targets.sliders[targets.count++] = target;
+        }
     }
-    for ( int i = 0; i < panel->GetChildCount(); ++i ) PublishSettingsSliders( panel->GetChild( i ), settings, width, height );
+    for ( int i = 0; i < panel->GetChildCount(); ++i ) PublishSettingsSliders( panel->GetChild( i ), settings, targets, width, height );
 }
 
 static void PublishSettings( int width, int height )
 {
     SourceTouchSettingsState settings = {};
+    SourceTouchSettingsSliderTargets targets = {};targets.struct_size = sizeof( targets );
     settings.struct_size = sizeof( settings );settings.render_width = float( width );settings.render_height = float( height );
     panorama::IUIPanel *pane = ActiveSettingsViewport();
     if ( pane && pane->BIsVisible() && pane->IsEnabled() && pane->GetParentWindow() && width > 0 && height > 0 )
@@ -506,9 +600,10 @@ static void PublishSettings( int width, int height )
         settings.scroll_offset = scroll && scroll->BLastMoveImmediate() ? scroll->GetScrollWindowPosition() * units : -pane->GetContentsYScrollOffset() * units;
         settings.content_height = scroll ? scroll->GetRangeMax() * units : settings.viewport.height;
         V_strncpy( settings.tab_id, pane->GetParent()->GetID(), sizeof( settings.tab_id ) );
-        PublishSettingsSliders( pane, settings, width, height );
+        PublishSettingsSliders( pane, settings, targets, width, height );
         settings.visible = settings.viewport.width > 0 && settings.viewport.height > 0;
     }
+    SourceTouchUpdateSettingsSliderTargets( &targets );
     SourceTouchUpdateSettings( &settings );
 }
 
@@ -541,6 +636,13 @@ static void InventoryCallback( const char *id )
 {
     panorama::IUIPanel *inventory = s_initialized && !SourceTouchConsoleIsVisible() ? InventoryPanel() : NULL;
     if ( !inventory || !id || V_strncmp( id, "Offline", 7 ) ) return;
+    if(!V_strncmp(id,"OfflineStickerPick",18) || !V_strncmp(id,"OfflineStickerSlot",18)) {
+        // Only a bounded numeric identifier crosses the native/JS boundary.
+        if(V_strlen(id)>28)return;
+        for(const char *p=id+18;*p;++p)if(*p<'0' || *p>'9')return;
+        char script[160];V_snprintf(script,sizeof(script),"OfflineInventory.ValidateUI('activate','%s');",id);
+        panorama::UIEngine()->RunScript(inventory,script,"icsm_sticker_native",1,1,false,false);return;
+    }
     panorama::IUIPanel *button = inventory->FindChildTraverse( id );
     if ( !button || !button->IsEnabled() ) return;
     panorama::DispatchEventAsync( 0.0f, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
@@ -634,7 +736,8 @@ static void PublishNavigation( int width, int height )
     // their original drawing; only a mounted native lobby bar hides it.
     if ( root )
     {
-        const uint32_t frostedPages = ( 1u << SourceNavigationPlay ) | ( 1u << SourceNavigationSettings );
+        const uint32_t frostedPages = ( 1u << SourceNavigationPlay ) | ( 1u << SourceNavigationSettings ) |
+            ( 1u << SourceNavigationInventory );
         root->SetHasClass( "icsm-neutral-frost", navigation.visible &&
             ( navigation.selected_mask & frostedPages ) != 0 && !SourceTouchConsoleIsVisible() );
         root->SetHasClass( "icsm-native-glass-nav", ( mounted & SourceGlassNavigation ) != 0 );
@@ -732,6 +835,7 @@ static void PublishState()
     s_state = state;
     // SourceTouchUpdateState copies inventory names during this call; its
     // native implementation must never retain the stack arrays above.
+    SourceTouchSetButtonsHidden( icsm_touch_hide_buttons.GetBool() );
     SourceTouchUpdateState( &state );
     s_state.weapons = NULL;
     s_state.weapon_count = 0;
@@ -818,7 +922,7 @@ static void PumpEvents()
             break;
         case LookEvent:
             if ( s_gameInput && s_lookCount < kCapacity )
-            { LookSample sample = { event.x, event.y, event.timestamp }; s_look[s_lookCount++] = sample; }
+            { LookSample sample = { event.x, event.y, event.timestamp, event.sampleInterval }; s_look[s_lookCount++] = sample; }
             break;
         case WeaponEvent: SelectInventory( event.code, event.value ); break;
         case CommandEvent:
@@ -885,10 +989,14 @@ static void ControllerMove( int slot, CUserCmd *cmd )
     view->StopPitchDrift();
     const float yawGain = touch_yaw_degrees_per_point.GetFloat();
     const float pitchGain = touch_pitch_degrees_per_point.GetFloat();
+    const ICSMTouchAim::Settings settings = AimSettings();
+    const ICSMTouchAim::Scope scope = AimScope();
     for ( unsigned i = 0; i < s_lookCount; ++i )
     {
-        const float yaw = -s_look[i].x * yawGain;
-        const float pitch = s_look[i].y * pitchGain;
+        s_lastAim = ICSMTouchAim::Apply(s_look[i].x, s_look[i].y, s_look[i].interval,
+            yawGain, pitchGain, settings, scope);
+        const float yaw = s_lastAim.yaw;
+        const float pitch = s_lastAim.pitch;
         angles[YAW] += yaw;
         angles[PITCH] += pitch;
         angles[PITCH] = clamp( angles[PITCH], -cl_pitchup.GetFloat(), cl_pitchdown.GetFloat() );
@@ -929,12 +1037,17 @@ static void RecordCommand( const CUserCmd *cmd, bool real )
     }
 }
 
+#include "frame_calibration_source.inc"
+
 static void FrameCallback( void * )
 {
     if ( !s_initialized || !engine ) return;
     // This callback is registered with the main-thread SDL touch module.  It
     // may run in the menu, where no active CInput movement callback is issued.
     ACTIVE_SPLITSCREEN_PLAYER_GUARD( 0 );
+    CalibrationFrame();
+    CheckQualityDisplaySize();
+    SynchronizeControllerSettings();
     PublishState();
 }
 
@@ -1037,6 +1150,11 @@ static void SettingsScrollDiagnosticCommand( const CCommand &args )
         char json[4096];
         if ( SourceTouchSettingsScrollSelfTestJSON( json, sizeof( json ) ) ) Msg( "ICSM_SETTINGS_SCROLL_TEST %s\n", json );
     }
+    else if ( args.ArgC() == 4 && !V_strcmp( args[1], "slider" ) && SettingsDiagnosticToken( args[2] ) && SettingsDiagnosticToken( args[3] ) )
+    {
+        if ( SourceTouchSettingsSliderSet( args[2], V_atof( args[3] ), true ) )
+            Msg( "ICSM_SETTINGS_SLIDER convar=%s fraction=%g\n", args[2], V_atof( args[3] ) );
+    }
     else if ( args.ArgC() >= 2 && args.ArgC() <= 3 && SettingsDiagnosticToken( args[1] ) )
     {
         float offset = V_atof( args[1] );
@@ -1045,15 +1163,27 @@ static void SettingsScrollDiagnosticCommand( const CCommand &args )
     }
 }
 static ConCommand i5_settings_scroll( "i5_settings_scroll", SettingsScrollDiagnosticCommand,
-    "Local UIKit settings scroll validation: <pixels> [1=animated], or test. Never synthesises UITouch.", FCVAR_DONTRECORD );
+    "Local settings validation: <pixels> [1=animated], test, or slider <visible convar> <0..1>. Never synthesises UITouch.", FCVAR_DONTRECORD );
 
-static void LayoutEditorCommand( const CCommand & )
+static void LayoutEditorCommand( const CCommand &args )
 {
+    if(args.ArgC()>1) {
+        if(SourceTouchLayoutEditorAction(args[1],args.ArgC()>2?V_atoi(args[2]):0))Msg("ICSM_TOUCH_LAYOUT action=%s ok=1\n",args[1]);
+        else Warning("ICSM_TOUCH_LAYOUT action=%s ok=0\n",args[1]);
+        return;
+    }
     ReleaseGameActions();
     SourceTouchOpenLayoutEditor();
 }
 static ConCommand i5_touch_layout( "i5_touch_layout", LayoutEditorCommand,
     "Open the native touch layout editor.", FCVAR_CLIENTCMD_CAN_EXECUTE );
+static void KeyboardEdgeDiagnosticCommand(const CCommand &args) {
+    if(args.ArgC()!=3 || (V_strcmp(args[2],"down") && V_strcmp(args[2],"up")))return;
+    Msg("ICSM_TOUCH_KEY_EDGE scancode=%d pressed=%d ok=%d\n",V_atoi(args[1]),!V_strcmp(args[2],"down"),
+        SourceTouchKeyboardTestEdge(V_atoi(args[1]),!V_strcmp(args[2],"down")));
+}
+static ConCommand i5_touch_key_edge("i5_touch_key_edge",KeyboardEdgeDiagnosticCommand,
+    "Local keyboard-path validation: <SDL scancode> <down|up>; gameplay only.",FCVAR_DONTRECORD);
 
 static void SavePlayerName(const char *value)
 {
@@ -1109,17 +1239,21 @@ static void Initialize()
     callbacks.frame = FrameCallback;
     s_initialized = true;
     SourceTouchSetCallbacks( &callbacks, NULL );
+    SourceTouchSetLookSampleCallback( LookSampleCallback );
     SourceTouchSetNavigationCallback( NavigationCallback );
     SourceTouchSetProfileCallback( ProfileCallback );
     SourceTouchSetMapCallbacks( MapScrollCallback, MapActivateCallback );
     SourceTouchSetSettingsScrollCallback( SettingsScrollCallback );
+    SourceTouchSetSettingsSliderCallback( SettingsSliderCallback );
     SourceTouchSetInventoryCallback( InventoryCallback );
-    Msg( "I5_TOUCH client ready: float ordered samples, linear gain, no acceleration\n" );
+    SourceTouchFrameCalibrationRecover(CalibrationQueue,CalibrationScene);
+    Msg( "I5_TOUCH client ready: timed actual samples, saved aim mode and scope sensitivity\n" );
 }
 
 static void Shutdown()
 {
     if ( !s_initialized ) return;
+    SourceTouchFrameCalibrationShutdown();
     ReleaseGameActions();
     if ( s_scoreHeld )
     {
@@ -1129,11 +1263,13 @@ static void Shutdown()
     SourceTouchState state = {};
     state.struct_size = sizeof( state );
     SourceTouchUpdateState( &state );
+    SourceTouchSetButtonsHidden( false );
     SourceTouchSetCallbacks( NULL, NULL );
     SourceTouchSetNavigationCallback( NULL );
     SourceTouchSetProfileCallback( NULL );
     SourceTouchSetMapCallbacks( NULL, NULL );
     SourceTouchSetSettingsScrollCallback( NULL );
+    SourceTouchSetSettingsSliderCallback( NULL );
     SourceTouchSetInventoryCallback( NULL );
     SourceTouchUpdateInventory( "", false );
     SourceTouchMapState maps = {};maps.struct_size = sizeof( maps );SourceTouchUpdateMaps( &maps );
@@ -1203,19 +1339,76 @@ extern "C" SOURCE_TOUCH_API size_t SourceTouchVideoStateJSON(char *buffer,size_t
     SourceTouchRect content=open?laidOutRect(root->FindChildTraverse("JsMainMenuContent")):SourceTouchRect{};
     SourceTouchRect playStart=open?laidOutRect(root->FindChildTraverse("StartMatchBtn")):SourceTouchRect{};
     bool covers=open && target.x<=0 && target.y<=0 && target.x+target.width>=width && target.y+target.height>=height;
+    const ICSMDisplay::SceneResolution plan=I5Touch::QualityScenePlan({unsigned(width),unsigned(height)});
     const char *blurEffect = root && root->BHasClass( "icsm-neutral-frost" ) ?
         "Source fastgaussian(10,10,3) / desaturated lobby" : "Source fastgaussian(8,8,3)";
-    int length=V_snprintf(buffer,capacity,"{\"fps_max\":%g,\"fps_max_menu\":%g,\"mat_powersavingsmode\":%g,\"cpu_level\":%g,\"gpu_level\":%g,\"gpu_mem_level\":%g,\"csm_quality_level\":%g,\"mat_vsync\":%g,\"scene_render_percent\":%g,\"fps_limit\":%g,\"metal_spatial_upscale\":%g,\"fullscreen\":%s,\"borderless\":%s,\"fullscreen_locked\":true,\"quality_preset\":%d,\"base_fps_locked\":%s,\"high_resolution\":[%d,%d],\"menu_blur\":{\"effect\":\"%s\",\"surface_pixels\":[%d,%d],\"render_pixels\":[%d,%d],\"ui_scale\":[%g,%g],\"mask_rect\":[%g,%g,%g,%g],\"target_rect\":[%g,%g,%g,%g],\"background_rect\":[%g,%g,%g,%g],\"content_rect\":[%g,%g,%g,%g],\"play_start_rect\":[%g,%g,%g,%g],\"open\":%s,\"covers_viewport\":%s,\"layout_updates\":%u}}",
+    int length=V_snprintf(buffer,capacity,"{\"fps_max\":%g,\"fps_max_menu\":%g,\"mat_powersavingsmode\":%g,\"cpu_level\":%g,\"gpu_level\":%g,\"gpu_mem_level\":%g,\"csm_quality_level\":%g,\"mat_vsync\":%g,\"scene_render_percent\":%g,\"fps_limit\":%g,\"metal_spatial_upscale\":%g,\"fullscreen\":%s,\"borderless\":%s,\"fullscreen_locked\":true,\"quality_preset\":%d,\"base_fps_locked\":%s,\"high_resolution\":[%d,%d],\"ui_resolution\":[%d,%d],\"scene_resolution\":[%u,%u],\"scene_output_resolution\":[%u,%u],\"ui_independent_resolution\":true,\"menu_blur\":{\"effect\":\"%s\",\"surface_pixels\":[%d,%d],\"render_pixels\":[%d,%d],\"ui_scale\":[%g,%g],\"mask_rect\":[%g,%g,%g,%g],\"target_rect\":[%g,%g,%g,%g],\"background_rect\":[%g,%g,%g,%g],\"content_rect\":[%g,%g,%g,%g],\"play_start_rect\":[%g,%g,%g,%g],\"open\":%s,\"covers_viewport\":%s,\"layout_updates\":%u}}",
         values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],values[8],values[9],values[10],
         config.Windowed()?"false":"true",config.NoWindowBorder()?"true":"false",
         I5Touch::icsm_quality_preset.GetInt(),I5Touch::s_qualityFrameLocked?"true":"false",
         I5Touch::icsm_quality_high_width.GetInt(),I5Touch::icsm_quality_high_height.GetInt(),
+        width,height,plan.input.width,plan.input.height,plan.output.width,plan.output.height,
         blurEffect,I5Touch::s_menuBlurSurfaceWidth,I5Touch::s_menuBlurSurfaceHeight,width,height,
         I5Touch::s_menuBlurScaleX,I5Touch::s_menuBlurScaleY,
         mask.x,mask.y,mask.width,mask.height,target.x,target.y,target.width,target.height,
         background.x,background.y,background.width,background.height,
         content.x,content.y,content.width,content.height,playStart.x,playStart.y,playStart.width,playStart.height,
         open?"true":"false",covers?"true":"false",I5Touch::s_menuBlurLayoutUpdates);
+    return length>0 && size_t(length)<capacity?size_t(length):0;
+}
+
+extern "C" SOURCE_TOUCH_API size_t SourceTouchControllerStateJSON(char *buffer,size_t capacity)
+{
+    if (!buffer || !capacity || !g_pInputSystem) return 0;
+    const char *names[]={"joystick","joystick_force_disabled","joystick_force_disabled_set_from_options",
+        "joy_advanced","joy_advaxisx","joy_advaxisy","joy_advaxisr","joy_advaxisu",
+        "joy_inverty","joy_movement_stick","joy_yawsensitivity","joy_pitchsensitivity",
+        "zoom_sensitivity_ratio_joystick","option_duck_method","option_speed_method",
+        "icsm_controller_move_deadzone","icsm_controller_look_deadzone",
+        "joy_forwardthreshold","joy_sidethreshold","joy_pitchthreshold","joy_yawthreshold"};
+    float v[ARRAYSIZE(names)]={};
+    for (size_t i=0;i<ARRAYSIZE(names);++i) {
+        ConVarRef ref(names[i],true); if (!ref.IsValid()) return 0;
+        v[i]=ref.GetFloat(); if (!IsFinite(v[i])) v[i]=0;
+    }
+    unsigned buttons=0;
+    const ButtonCode_t codes[]={KEY_XBUTTON_A,KEY_XBUTTON_B,KEY_XBUTTON_X,KEY_XBUTTON_Y,
+        KEY_XBUTTON_LEFT_SHOULDER,KEY_XBUTTON_RIGHT_SHOULDER,KEY_XBUTTON_BACK,KEY_XBUTTON_START,
+        KEY_XBUTTON_STICK1,KEY_XBUTTON_STICK2,KEY_XBUTTON_LTRIGGER,KEY_XBUTTON_RTRIGGER};
+    for (size_t i=0;i<ARRAYSIZE(codes);++i) if (g_pInputSystem->IsButtonDown(codes[i])) buttons|=1u<<i;
+    char effective[512]="{}";
+    if (!I5Touch::ICSMControllerAxesJSON(effective,sizeof(effective))) V_strcpy_safe(effective,"{}");
+    int length=V_snprintf(buffer,capacity,
+        "{\"backend\":\"SDL GameController / original Source JoyStickMove and key bindings\","
+        "\"setup_version\":%d,\"joystick_count\":%d,\"enabled\":%s,\"force_disabled\":%g,\"option_disabled\":%g,"
+        "\"advanced\":%g,\"axis_map\":[%g,%g,%g,%g],\"invert_y\":%g,\"movement_stick\":%g,"
+        "\"yaw_sensitivity\":%g,\"pitch_sensitivity\":%g,\"zoom_sensitivity\":%g,\"duck_method\":%g,\"walk_method\":%g,"
+        "\"move_deadzone_percent\":%g,\"look_deadzone_percent\":%g,\"deadzone_forward_side_pitch_yaw\":[%g,%g,%g,%g],"
+        "\"axes\":[%d,%d,%d,%d],\"button_mask\":%u,\"effective\":%s}",
+        I5Touch::icsm_controller_setup_version.GetInt(),g_pInputSystem->GetJoystickCount(),v[0] && !v[1]?"true":"false",
+        v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],
+        v[15],v[16],v[17],v[18],v[19],v[20],
+        g_pInputSystem->GetAnalogValue(JOYSTICK_AXIS(0,JOY_AXIS_X)),g_pInputSystem->GetAnalogValue(JOYSTICK_AXIS(0,JOY_AXIS_Y)),
+        g_pInputSystem->GetAnalogValue(JOYSTICK_AXIS(0,JOY_AXIS_U)),g_pInputSystem->GetAnalogValue(JOYSTICK_AXIS(0,JOY_AXIS_R)),buttons,effective);
+    return length>0 && size_t(length)<capacity ? size_t(length) : 0;
+}
+
+extern "C" SOURCE_TOUCH_API size_t SourceTouchAimStateJSON(char *buffer,size_t capacity)
+{
+    if (!buffer || !capacity) return 0;
+    const ICSMTouchAim::Settings settings=I5Touch::AimSettings();
+    C_CSPlayer *player=C_CSPlayer::GetLocalCSPlayer();
+    const Vector origin=player?player->GetAbsOrigin():vec3_origin;
+    QAngle angles(0,0,0);if(engine)engine->GetViewAngles(angles);
+    char map[128]="";if(engine)V_FileBase(engine->GetLevelName(),map,sizeof(map));
+    int length=V_snprintf(buffer,capacity,
+        "{\"mode\":%d,\"total\":%g,\"rifle_scope\":%g,\"sniper_scope\":%g,\"scope\":%d,\"last_acceleration\":%g,\"last_sensitivity\":%g,\"fire_sensitivity_shared\":true,\"timing\":\"actual UIKit sample intervals\","
+        "\"map\":\"%s\",\"alive\":%s,\"team\":%d,\"origin\":[%g,%g,%g],\"angles\":[%g,%g,%g],\"move_type\":%d}",
+        settings.mode,ICSMTouchAim::Sensitivity(settings.total),ICSMTouchAim::Sensitivity(settings.rifle),
+        ICSMTouchAim::Sensitivity(settings.sniper),int(I5Touch::AimScope()),
+        I5Touch::s_lastAim.acceleration,I5Touch::s_lastAim.sensitivity,
+        map,player && player->IsAlive()?"true":"false",player?player->GetTeamNumber():0,
+        origin.x,origin.y,origin.z,angles.x,angles.y,angles.z,player?int(player->GetMoveType()):0);
     return length>0 && size_t(length)<capacity?size_t(length):0;
 }
 

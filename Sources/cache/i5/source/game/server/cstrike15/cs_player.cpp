@@ -9,6 +9,8 @@
 #include "cs_player.h"
 #include "offline_loadout.h"
 #include "offline_skin.h"
+#include "offline_stickers.h"
+#include "offline_glove_catalog.h"
 #include "cs_gamerules.h"
 #include "trains.h"
 #include "vcollide_parse.h"
@@ -1098,6 +1100,18 @@ void CCSPlayer::Precache()
 	bool bPreload = true;
 
 	PlayerModelInfo::GetPtr()->InitializeForCurrentMap();
+#if defined(SOURCE_IOS)
+    // Only model precache is shared; clothing composites remain limited to
+    // the two equipped local recipes. Map defaults are still loaded below.
+    for(int index:ICSMGloves::Definitions) {
+        if(!ICSMGloves::Custom(index))continue;
+        if(const auto *glove=GetItemSchema()->GetItemDefinition(index)) {
+            const char *model=glove->GetBasePlayerDisplayModel();
+            if(model && model[0]) {PrecacheModel(model);DevMsg("ICSM_GLOVE_PRECACHE %s\n",model);}
+        }
+    }
+#endif
+
 
 	// The following code is allowed to load non-existant .phy files due to the nested nature of the loads.
 	// Tell the cache system not to worry if file are not found.
@@ -8951,19 +8965,65 @@ bool CCSPlayer::CSWeaponDrop( CBaseCombatWeapon *pWeapon, Vector targetPos, bool
 
 void CCSPlayer::TransferInventory( CCSPlayer* pTargetPlayer )
 {
-    // as part of transferring inventory, remove what WE have
-	SetArmorValue( 0 );
-	m_flLastEquippedHelmetTime = 0;
-	m_flLastEquippedArmorTime = 0;
-	m_bHasHelmet = false;
-	m_bHasHeavyArmor = false; // m_bHasHeavyAssaultSuit
-	m_bHasNightVision = false;
-	m_bNightVisionOn = false;
+    if ( !pTargetPlayer || pTargetPlayer == this )
+        return;
 
-	RemoveAllItems( true );
+    // The partner depot retained only source cleanup. Transfer the actual
+    // entities before that cleanup so clips, reserve ammo, paint and silencer
+    // state survive. Spawn() has already given the recipient default weapons.
+    CHandle<CBaseCombatWeapon> hActiveWeapon = GetActiveWeapon();
+    int ammo[MAX_AMMO_TYPES];
+    for ( int i = 0; i < MAX_AMMO_TYPES; ++i )
+        ammo[i] = GetAmmoCount( i );
 
-	pTargetPlayer->UpdateVoicePitch();
-	UpdateVoicePitch();
+    pTargetPlayer->RemoveAllItems( true );
+    pTargetPlayer->SetArmorValue( ArmorValue() );
+    pTargetPlayer->m_flLastEquippedHelmetTime = m_flLastEquippedHelmetTime;
+    pTargetPlayer->m_flLastEquippedArmorTime = m_flLastEquippedArmorTime;
+    pTargetPlayer->m_bHasHelmet = m_bHasHelmet;
+    pTargetPlayer->m_bHasHeavyArmor = m_bHasHeavyArmor;
+    pTargetPlayer->m_bHasNightVision = m_bHasNightVision;
+    pTargetPlayer->m_bNightVisionOn = m_bNightVisionOn;
+    pTargetPlayer->m_bHasDefuser = m_bHasDefuser;
+    pTargetPlayer->m_iAccount = m_iAccount;
+    pTargetPlayer->m_iAccountMoneyEarnedForNextRound = m_iAccountMoneyEarnedForNextRound;
+
+    int nTransferred = 0;
+    for ( int i = 0; i < WeaponCount(); ++i )
+    {
+        CBaseCombatWeapon *pWeapon = GetWeapon( i );
+        if ( pWeapon && Weapon_Detach( pWeapon ) )
+        {
+            pTargetPlayer->Weapon_Equip( pWeapon );
+            ++nTransferred;
+        }
+    }
+    // Equip gives default exhaustible ammo (grenades). Restore the exact
+    // player-held counts afterward; gun reserve ammo stays on its entity.
+    for ( int i = 0; i < MAX_AMMO_TYPES; ++i )
+        pTargetPlayer->SetAmmoCount( ammo[i], i );
+
+    if ( hActiveWeapon.Get() && hActiveWeapon->GetOwner() == pTargetPlayer )
+        pTargetPlayer->Weapon_Switch( hActiveWeapon.Get() );
+
+    SetArmorValue( 0 );
+    m_flLastEquippedHelmetTime = 0;
+    m_flLastEquippedArmorTime = 0;
+    m_bHasHelmet = false;
+    m_bHasHeavyArmor = false;
+    m_bHasNightVision = false;
+    m_bNightVisionOn = false;
+    // All transferred weapons have been detached, so this cannot delete them.
+    RemoveAllItems( true );
+    pTargetPlayer->UpdateAddonBits();
+    pTargetPlayer->RecalculateCurrentEquipmentValue();
+    RecalculateCurrentEquipmentValue();
+    pTargetPlayer->UpdateVoicePitch();
+    UpdateVoicePitch();
+    Msg( "ICSM_BOT_INVENTORY_TRANSFER source=%d target=%d weapons=%d expected_active=%d actual_active=%d\n",
+        entindex(), pTargetPlayer->entindex(), nTransferred,
+        hActiveWeapon.Get() ? hActiveWeapon->entindex() : -1,
+        pTargetPlayer->GetActiveWeapon() ? pTargetPlayer->GetActiveWeapon()->entindex() : -1 );
 }
 
 bool CCSPlayer::DropWeaponSlot( int nSlot, bool fromDeath )
@@ -14191,6 +14251,7 @@ CBaseEntity	*CCSPlayer::GiveNamedItem( const char *pchName, int iSubType /*= 0*/
         {
             const ICSMSkin::Selection skin = ICSMSkin::Read(GetTeamNumber(), weapon->GetItemDefinitionIndex());
             weapon->ICSMSetOfflinePaint(skin.paint, skin.seed, skin.wear);
+            ICSMStickers::Apply(weapon->GetAttributeContainer()->GetItem(), ICSMStickers::Read(weapon->GetItemDefinitionIndex(),skin.paint));
             Msg("ICSM_SKIN_SPAWN team=%d definition=%d paint=%d seed=%d wear=%.6f\n",
                 GetTeamNumber(), weapon->GetItemDefinitionIndex(), skin.paint, skin.seed, skin.wear);
         }
@@ -17685,7 +17746,10 @@ bool CCSPlayer::TakeControlOfBot( CCSBot *pBot, bool bSkipTeamCheck )
 	pBot->DispatchUpdateTransmitState();
 	DispatchUpdateTransmitState();
 
-	CBaseCombatWeapon* pWeapon = pBotWeapon ? CSWeapon_OwnsThisType( pBotWeapon->GetEconItemView() ) : NULL;
+    // Inventory handoff preserves this exact entity. The partner-depot
+    // CSWeapon_OwnsThisType stub returns NULL, and a definition lookup could
+    // select a different instance instead of the bot's weapon.
+    CBaseCombatWeapon* pWeapon = pBotWeapon && pBotWeapon->GetOwner() == this ? pBotWeapon : NULL;
 
 	if ( pWeapon )
 	{

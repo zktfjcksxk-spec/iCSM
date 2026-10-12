@@ -1,0 +1,60 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+sampler Tex1Sampler : register( s0 );
+
+const float4 g_Const0 : register( c0 );
+
+#define derezstrength g_Const0.x
+#define pixelSize g_Const0.y
+#define deployLerp g_Const0.z
+
+#define pi 3.14159f
+#define vfloat2pt5pt5 (float2( 0.5f , 0.5f ))
+#define abbr 0.001
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+//float2 rotate( float2 inputUV, float rotateTau )
+//{
+//   return float2( inputUV.x * cos(rotateTau) - inputUV.y * sin(rotateTau),
+//                  inputUV.x * sin(rotateTau) + inputUV.y * cos(rotateTau) );
+//}
+
+float4 main( PS_INPUT i ) : COLOR
+{	
+	float2 vUV = i.vBaseUV;
+	
+	float flDeRez = smoothstep( 1, 0.1, deployLerp );
+	flDeRez = clamp( flDeRez, 0.0001, 1.0 );		// Clamping to avoid divide by zero in fmod (GL platform)
+	flDeRez = flDeRez * derezstrength;
+	float flModPixelX = fmod( i.vBaseUV.x, flDeRez );
+	float flModPixelY = fmod( i.vBaseUV.y, flDeRez );
+	vUV.x = clamp(vUV.x-flModPixelX,0.001,0.999);
+	vUV.y = clamp(vUV.y-flModPixelY,0.001,0.999);
+	
+	// abberation
+	float flDistToCenter = length( vUV - vfloat2pt5pt5 );
+	float flR = tex2D( Tex1Sampler, vUV + float2( abbr, abbr ) * flDistToCenter	).r;
+	float flG = tex2D( Tex1Sampler, vUV + float2( -abbr, abbr ) * flDistToCenter ).g;
+	float flB = tex2D( Tex1Sampler, vUV + float2( abbr, -abbr ) * flDistToCenter ).b;
+	float4 cOut = float4( flR, flG, flB, 1 );
+	//float4 cOut = float4( tex2D(Tex1Sampler, vUV).rgb, 1 );
+	
+	// step color range
+	cOut.r -= fmod( cOut.r, 0.001 );
+	cOut.g -= fmod( cOut.g, 0.002 );
+	cOut.b -= fmod( cOut.b, 0.003 );
+
+	// scanline
+	cOut *= abs(sin( vUV.y * 900 ) * 0.3) + 1.3;
+
+	cOut *= deployLerp * deployLerp * 1.2;
+
+	return cOut;
+}
+

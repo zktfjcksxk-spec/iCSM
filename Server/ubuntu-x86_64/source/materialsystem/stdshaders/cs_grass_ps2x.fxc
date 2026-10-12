@@ -1,0 +1,123 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// STATIC:  "CASCADED_SHADOW_MAPPING"	"0..1" [ps30]
+// STATIC:	"CSM_MODE"					"0..3" [ps30]
+// STATIC:	"WORLDSPACETINTTEXTURE"		"0..1" [ps30]
+// STATIC:	"WORLDSPACETYPETEXTURE"		"0..1" [ps30]
+
+// DYNAMIC: "DYN_CSM_ENABLED"			"0..1" [ps30]
+
+// SKIP: ( $CASCADED_SHADOW_MAPPING == 0 ) && ( $DYN_CSM_ENABLED == 1 )
+
+#include "common_fog_ps_fxc.h"
+#include "common_ps_fxc.h"
+#include "shader_constant_register_map.h"
+
+const float4 g_Color					: register( c0 );
+const float g_HDRColorScale				: register( c1 );
+
+const float4 g_FogParams				: register( PSREG_FOG_PARAMS );
+const float4 g_EyePos_SpecExponent		: register( PSREG_EYEPOS_SPEC_EXPONENT );
+
+#define g_MipBias g_EyePos_SpecExponent.w
+
+sampler TexSampler	: register( s4 );
+sampler MaskSampler	: register( s5 );
+
+#if ( CASCADED_SHADOW_MAPPING == 1 )
+	sampler CSMDepthAtlasSampler					: register( s15 );
+	#define CASCADE_SIZE 3
+	#define CSM_ENABLED 1
+	#include "csm_common_fxc.h"
+#endif
+
+float GetLum(float3 color)
+{
+   return dot(color, float3(0.3f,0.59f,0.11f));
+}
+
+struct PS_INPUT
+{
+	float2 baseTexCoord				: TEXCOORD0;		// Base texture coordinate
+	float4 color					: TEXCOORD2;		// Vertex color 
+	float4 tint						: TEXCOORD5;		// tint
+	float4 diffuselight				: TEXCOORD6;		// from lighting or unlit
+#if ( WORLDSPACETYPETEXTURE == 1 )
+	float4 data						: TEXCOORD3;		// lookup data
+#endif
+	float4  sway					: TEXCOORD4;
+	float4 worldPos_projPosZ		: TEXCOORD7;		// Necessary for pixel fog
+};
+
+float3 PhotoshopOverlay( float3 cBase, float3 cBlend )
+{
+	float3 cNew;
+	cNew = step( 0.5, cBase );
+	cNew = lerp( (cBase*cBlend*2), (1.0-(2.0*(1.0-cBase)*(1.0-cBlend))), cNew );
+	return cNew;
+}
+
+float3 tintColor( float3 c1, float3 tint, float amt )
+{
+   // perceptual luminance
+   float3 lum = float3( 0.299, 0.587, 0.114 ); 
+
+   float3 c2 = tint;
+   float luminance1 = dot( c1, lum );
+   float luminance2 = dot( c2, lum );
+   luminance2 = max( luminance2, 0.000001f );
+   c2 = c2 * luminance1 / luminance2 ;
+   return lerp( c1, c2, amt );
+}
+
+float4_color_return_type main( PS_INPUT i ) : COLOR
+{
+	
+#if ( WORLDSPACETYPETEXTURE == 1 )
+	float2 vUV = float2( i.baseTexCoord.x * 0.5f, i.baseTexCoord.y );
+	vUV.x += ( step(0.1f,i.data.r) * 0.5f );
+	float4 masksSample = tex2Dbias( MaskSampler,  float4(vUV,0,g_MipBias) );
+	masksSample.b = masksSample.b * 2.0f - 1.0f;
+	float2 sway = lerp( i.sway.xy, i.sway.zw, masksSample.r );
+	vUV.x += masksSample.b * sway.x;
+	vUV.y -= masksSample.b * sway.y;
+	float4 sample = tex2Dbias( TexSampler, float4(vUV,0,g_MipBias) );
+#else
+	float4 sample = tex2Dbias( TexSampler, float4(i.baseTexCoord,0,g_MipBias) );
+	float4 masksSample = tex2Dbias( MaskSampler,  float4(i.baseTexCoord,0,g_MipBias) );
+	masksSample.r = 1.0f;
+#endif
+	
+	sample.a *= i.color.a;
+	clip( sample.a - 0.15 );
+	sample.a = 1;
+	
+	#if ( WORLDSPACETINTTEXTURE == 1 )
+		//sample.rgb = PhotoshopOverlay( sample.rgb,  );
+		sample.rgb = saturate( sample.rgb * GetLum(i.tint.rgb).xxx * 2.0f );
+		sample.rgb = tintColor( sample.rgb, i.tint.rgb, masksSample.g );
+	#endif
+
+	float fogFactor = CalcPixelFogFactor( PIXELFOGTYPE, g_FogParams, g_EyePos_SpecExponent.xyz, i.worldPos_projPosZ.xyz, i.worldPos_projPosZ.w );
+
+	#if ( (CASCADED_SHADOW_MAPPING == 1) && (DYN_CSM_ENABLED == 1) )
+		float flShadowScalar = 0;
+		float flShadow = CSMComputeShadowing( i.worldPos_projPosZ.xyz );
+		float3 diffuseLightingCSM = i.diffuselight.rgb + ( g_vCSMLightColor.rgb * g_vCSMLightColor.a * flShadow );
+		float3 diffuseLightingMap = i.diffuselight.rgb + ( g_vCSMLightColor.rgb * g_vCSMLightColor.a * i.diffuselight.a );
+
+		float3 diffuseLighting = lerp( diffuseLightingCSM, diffuseLightingMap, i.diffuselight.a);
+
+		sample.rgb *= diffuseLighting;
+		//sample.rgb *= i.diffuselight.rgb;
+	#else
+		sample.rgb *= i.diffuselight.rgb;
+	#endif
+
+	sample.rgb *= i.color.rgb;
+
+	sample = FinalOutput( sample, fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR );
+
+	return sample;
+}
+

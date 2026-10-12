@@ -30,6 +30,8 @@
                     <Label text="关闭" value="0" id="icsmfg0" /><Label text="开启（60 → 120）" value="1" id="icsmfg1" />
                 </CSGOSettingsEnumDropDown></Panel>
                 <Label id="ICSMInterpolationNote" class="ICSMVideoPresetNote" text="基础60帧时可开启插帧，需设备支持；实际显示帧率随场景负载变化。" />
+                <Panel class="SettingsMenuDropdownContainer"><Label text="插帧性能测试" class="half-width" /><Button id="ICSMFrameCalibration" class="PopupButton White" onactivate="GameInterfaceAPI.ConsoleCommand(&quot;icsm_frame_calibration&quot;);"><Label text="测试当前设备" /></Button></Panel>
+                <Label class="ICSMVideoPresetNote" text="按当前画质重复跑图和机器人场景，测量真实帧率与显示帧间隔；查看结果后手动应用推荐插帧参数。" />
             </Panel>
             <Panel id="SettingsVideoAdvanced" class="SettingsBackground">
                 <Panel class="SettingsSectionTitleContianer"><Label class="SettingsSectionTitleLabel" text="高级视频选项" /></Panel>
@@ -63,30 +65,30 @@
                             <Label text="#GameUI_DisplayMonitor" value="0" id="tvmode0" />
                             <Label text="#GameUI_DisplayTV" value="1" id="tvmode1" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsSlider id="brightness" text="#GameUI_Brightness" max="2.6" min="1.6" invert="true" percentage="true" value100percent="2.0" convar="mat_monitorgamma" />
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="AspectRatioEnum" oninputsubmit="CSGOAspectRatioSelectionChanged()">
                             <Label text="#SFUI_Settings_Normal" value="0" id="aspectratio0" />
                             <Label text="宽屏（16:9 / 手机屏幕）" value="1" id="aspectratio1" />
                             <Label text="#SFUI_Settings_Widescreen_16_10" value="2" id="aspectratio2" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="ResolutionEnum" oninputsubmit="CSGOResolutionSelectionChanged()">
                             <Label value="0" id="resolution0" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown class="PopupButton White" id="DisplayModeEnum">
                     <Label text="#SFUI_Settings_Windowed" value="0" id="displaymode0" />
                     <Label text="#SFUI_Settings_Fullscreen" value="1" id="displaymode1" />
                     <Label text="#SFUI_Settings_Fullscreen_Windowed" value="2" id="displaymode2" />
                 </CSGOSettingsEnumDropDown>
-
+                
 <CSGOSettingsEnumDropDown class="PopupButton White" id="PowerSavingsMode">
                     <Label text="#SFUI_Settings_Disabled" value="0" id="laptoppower0" />
                     <Label text="#SFUI_Settings_Enabled" value="1" id="laptoppower1" />
                 </CSGOSettingsEnumDropDown>
-
+                
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="CSMQualityLevel">
                             <Label text="#SFUI_CSM_Low" value="0" id="csmqualitylevel0" />
                             <Label text="#SFUI_CSM_Med" value="1" id="csmqualitylevel1" />
@@ -94,21 +96,21 @@
                             <Label text="#SFUI_CSM_VeryHigh" value="3" id="csmqualitylevel3" />
                             <Label text="#SFUI_Settings_Choice_Autodetect" value="9999999" id="csmqualitylevel4" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="ModelTextureDetail">
                             <Label text="#SFUI_Settings_Low" value="0" id="gpumemlevel0" />
                             <Label text="#SFUI_Settings_Medium" value="1" id="gpumemlevel1" />
                             <Label text="#SFUI_Settings_High" value="2" id="gpumemlevel2" />
                             <Label text="#SFUI_Settings_Choice_Autodetect" value="9999999" id="gpumemlevel3" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="EffectDetail">
                             <Label text="#SFUI_Settings_Low" value="0" id="cpulevel0" />
                             <Label text="#SFUI_Settings_Medium" value="1" id="cpulevel1" />
                             <Label text="#SFUI_Settings_High" value="2" id="cpulevel2" />
                             <Label text="#SFUI_Settings_Choice_Autodetect" value="9999999" id="cpulevel3" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="ShaderDetail">
                             <Label text="#SFUI_Settings_Low" value="0" id="gpulevel0" />
                             <Label text="#SFUI_Settings_Medium" value="1" id="gpulevel1" />
@@ -116,7 +118,7 @@
                             <Label text="#SFUI_Settings_Very_High" value="3" id="gpulevel3" />
                             <Label text="#SFUI_Settings_Choice_Autodetect" value="9999999" id="gpulevel4" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="FilteringMode">
                             <Label text="#SFUI_Settings_Bilinear" value="0" id="matforceaniso0" />
                             <Label text="#SFUI_Settings_Trilinear" value="1" id="matforceaniso1" />
@@ -126,23 +128,23 @@
                             <Label text="#SFUI_Settings_Anisotropic_16X" value="16" id="matforceaniso5" />
                             <Label text="#SFUI_Settings_Choice_Autodetect" value="9999999" id="matforceaniso6" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown class="PopupButton White" id="AAMode">
                     <Label value="0" id="antialisaing0" />
                     <Label value="1" id="antialiasing1" />
                 </CSGOSettingsEnumDropDown>
-
+                
 <CSGOSettingsEnumDropDown onuserinputsubmit="SettingsMenuShared.VideoSettingsOnUserInputSubmit()" class="PopupButton White" id="FXAA">
                             <Label text="#SFUI_FXAA_Disabled" value="0" id="fxaa0" />
                             <Label text="#SFUI_FXAA_Enabled" value="1" id="fxaa1" />
                         </CSGOSettingsEnumDropDown>
-
+                    
 <CSGOSettingsEnumDropDown class="PopupButton White" id="VSync">
                     <Label text="#SFUI_Settings_Disabled" value="0" id="vsync0" />
                     <Label text="#SFUI_Settings_Enabled_Double" value="1" id="vsync1" />
                     <Label text="#SFUI_Settings_Enabled_Triple" value="2" id="vsync2" />
                 </CSGOSettingsEnumDropDown>
-
+            
 <CSGOSettingsEnumDropDown class="PopupButton White" id="MatQueueMode">
                     <Label text="#SFUI_Settings_Disabled" value="0" id="multicore0" />
                     <Label text="#SFUI_Settings_Enabled" value="-1" id="multicore1" />

@@ -1,0 +1,65 @@
+//-----------------------------------------------------------------------------
+//	CLIENT_CSTRIKE15.VPC
+//
+//
+// ***   KEEP IN SYNC WITH THESE FILES   *** 
+//
+// client_cstrike15_panorama.vpc
+//
+//
+//-----------------------------------------------------------------------------
+
+
+// Before creating multiple client dll's, this file used to look like this:
+// 
+//		client_cstrike.vpc
+//		{
+//			prelude0
+// 			client_base.vpc
+// 			{
+// 				prelude1
+// 				source_dll_base.vpc
+// 				post1
+// 			}
+// 			post0
+//		}
+// 	
+// 	It now contains this
+// 	
+// 		client_cstrike.vpc
+//		{
+//			prelude0
+// 			prelude1
+// 			source_dll_base.vpc
+//
+// 			[ *** Choose Scaleform or Panorama, *** ]
+//
+// 			client_cstrike15_inc.vpc
+// 			{
+// 				client_base.vpc
+// 				{
+// 					post1	// client_base.vpc now contains only post1
+// 				}
+// 				post2	
+// 			}
+//		}
+	
+
+$Macro SRCDIR		"..\.."
+$Macro GAMENAME 	"csgo"
+
+$Macro OUTBINDIR	"$SRCDIR\..\game\$GAMENAME\bin"
+$Macro OUTCEGDIR	"$SRCDIR\..\game\$GAMENAME\bin\ceg"		[$WINDOWS && $CEG]
+$Macro DEVKITBINDIR	"$GAMENAME\bin"							[$X360]
+
+$Macro PROJNAME		"Client (CSGO)"
+$Macro OUTBINNAME	"client"
+$Macro GENERATED_PROTO_DIR	"$SRCDIR\game\$OUTBINNAME\generated_proto"
+
+$include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+
+// Scaleform-only client
+$Conditional INCLUDE_SCALEFORM "1"
+$Conditional PANORAMA_ENABLE   "0"	[ $WIN32 || $OSXALL || ( $LINUX && !$DEDICATED ) ]
+
+$Include "$SRCDIR\game\client\client_cstrike15_inc.vpc"

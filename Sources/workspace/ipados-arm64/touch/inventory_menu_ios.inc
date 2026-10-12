@@ -47,13 +47,22 @@
         self.dismissArea=[UIButton new];self.dismissArea.backgroundColor=[UIColor colorWithWhite:0 alpha:.1];
         self.dismissArea.accessibilityLabel=@"关闭武器菜单";
         [self.dismissArea addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];[self addSubview:self.dismissArea];
-        self.panel=frostedSurface(22,YES);
+        self.panel=translucentSurface(12,YES);
+        self.panel.backgroundColor=[UIColor colorWithWhite:0 alpha:.90];
+        self.panel.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;
         [self addSubview:self.panel];
         self.titleLabel=inventoryLabel(14,UIFontWeightSemibold);self.titleLabel.text=row[@"name"];
         self.titleLabel.textColor=[UIColor colorWithWhite:1 alpha:.75];[self.panel addSubview:self.titleLabel];
         BOOL ct=[row[@"ct"] boolValue],t=[row[@"t"] boolValue];
         NSInteger side=[row[@"side"] integerValue];
-        if(side==3 || side==2) {
+        if([row[@"sticker_action"] length]) {
+            ICSMInventoryMenuAction *entry=[[ICSMInventoryMenuAction alloc] initWithText:@"贴纸" symbol:@"tag" action:row[@"sticker_action"] equipped:NO];
+            ICSMInventoryMenuAction *cancel=[[ICSMInventoryMenuAction alloc] initWithText:@"取消" symbol:@"xmark" action:@"" equipped:NO];
+            self.entries=@[entry,cancel];
+            for(ICSMInventoryMenuAction *button in self.entries) {
+                [button addTarget:self action:@selector(activate:) forControlEvents:UIControlEventTouchUpInside];[self.panel addSubview:button];
+            }
+        } else if(side==3 || side==2) {
             BOOL equipped=[row[side==3?@"equipped_ct":@"equipped_t"] boolValue];
             NSString *caption=side==3?@"为警方装备":@"为匪徒装备";
             ICSMInventoryMenuAction *equip=[[ICSMInventoryMenuAction alloc] initWithText:caption symbol:side==3?@"shield.fill":@"flame.fill"

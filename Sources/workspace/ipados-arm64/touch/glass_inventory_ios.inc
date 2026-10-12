@@ -1,4 +1,4 @@
-/* Native ordinary frosted inventory cards. Panorama and
+/* Native inventory cards over the shared play/settings frosted backdrop. Panorama and
    NativeInventoryAPI own classification, eligibility, saving and skin state. */
 static void (*inventoryActivate)(const char*)=nullptr;
 static NSDictionary *inventoryDiagnostics;
@@ -8,6 +8,8 @@ static uint64_t inventoryActivations=0,inventoryMenus=0,inventorySnapshots=0;
 static NSString *inventoryLastAction=@"";
 static NSDictionary *inventoryLastMenu;
 static NSCache<NSString*,UIImage*> *inventoryImages;
+static double inventoryHiddenSince=0;
+static uint64_t inventoryResourceTrims=0;
 
 static void inventorySend(NSString *panelID) {
     std::lock_guard<std::recursive_mutex> lock(mutex);
@@ -19,10 +21,19 @@ static UIImage *inventoryImage(NSString *url) {
     NSString *file=url.lastPathComponent;
     static NSRegularExpression *pattern;
     static NSArray<NSString*> *directories;
-    if (!pattern) pattern=[NSRegularExpression regularExpressionWithPattern:@"^[0-9]+_[0-9]+\\.png$" options:0 error:nil];
+    BOOL sticker=[file hasPrefix:@"sticker_"];
+    BOOL preview=[file hasPrefix:@"preview_"];
+    if (!pattern) pattern=[NSRegularExpression regularExpressionWithPattern:@"^([0-9]+_[0-9]+|sticker_[0-9]+|preview_[0-9]+(_[0-9]+){7})\\.png$" options:0 error:nil];
     if (!file || [pattern numberOfMatchesInString:file options:0 range:NSMakeRange(0,file.length)]!=1) return nil;
     if (!inventoryImages) {inventoryImages=[NSCache new];inventoryImages.totalCostLimit=32*1024*1024;inventoryImages.countLimit=96;}
     UIImage *cached=[inventoryImages objectForKey:file];if(cached)return cached;
+    if(preview) {
+        NSString *docs=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;
+        NSString *path=[[docs stringByAppendingPathComponent:@"runtime-i5/csgo/cfg/icsm-sticker-previews"] stringByAppendingPathComponent:file];
+        UIImage *image=[UIImage imageWithContentsOfFile:path];
+        if(image)[inventoryImages setObject:image forKey:file cost:(NSUInteger)(image.size.width*image.size.height*image.scale*image.scale*4)];
+        return image;
+    }
     if (!directories) {
         NSString *bundle=NSBundle.mainBundle.resourcePath;
         NSString *docs=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;
@@ -32,7 +43,8 @@ static UIImage *inventoryImage(NSString *url) {
             [docs stringByAppendingPathComponent:@"game-assets/csgo/materials/panorama/images/offline_skins"]];
     }
     for (NSString *directory in directories) {
-        UIImage *image=[UIImage imageWithContentsOfFile:[directory stringByAppendingPathComponent:file]];
+        NSString *actual=sticker?[[directory stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"offline_stickers"]:directory;
+        UIImage *image=[UIImage imageWithContentsOfFile:[actual stringByAppendingPathComponent:file]];
         if (!image) continue;
         [inventoryImages setObject:image forKey:file cost:(NSUInteger)(image.size.width*image.size.height*image.scale*image.scale*4)];
         return image;
@@ -43,11 +55,15 @@ static UIImage *inventoryImage(NSString *url) {
 static UILabel *inventoryLabel(CGFloat size,UIFontWeight weight) {
     UILabel *label=[UILabel new];label.textColor=UIColor.whiteColor;
     label.font=[UIFont systemFontOfSize:size weight:weight];
-    label.shadowColor=[UIColor colorWithWhite:0 alpha:.45];label.shadowOffset=CGSizeMake(0,1);
     return label;
 }
 static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
-    return frostedSurface(radius,NO);
+    // Match settings' quality tiles. The page already shares Source's single
+    // neutral backdrop blur; individual cards do not need another effect.
+    ICSMTranslucentSurface *view=translucentSurface(radius,NO);
+    view.backgroundColor=[UIColor colorWithWhite:1 alpha:.07];
+    view.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;
+    return view;
 }
 #include "inventory_menu_ios.inc"
 
@@ -56,12 +72,14 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
 @property(nonatomic,strong) UILabel *caption;
 @property(nonatomic,copy) NSString *actionID;
 @property(nonatomic) BOOL chosen;
+@property(nonatomic) BOOL prominent;
 -(instancetype)initWithText:(NSString*)text action:(NSString*)action;
+-(void)updateAppearance;
 @end
 @implementation ICSMInventoryButton
 -(instancetype)initWithText:(NSString*)text action:(NSString*)action {
     if((self=[super initWithFrame:CGRectZero])) {
-        self.glass=inventorySurface(22);self.glass.userInteractionEnabled=NO;[self addSubview:self.glass];
+        self.glass=inventorySurface(12);self.glass.userInteractionEnabled=NO;[self addSubview:self.glass];
         self.caption=inventoryLabel(16,UIFontWeightSemibold);self.caption.textAlignment=NSTextAlignmentCenter;
         self.caption.text=text;self.caption.adjustsFontSizeToFitWidth=YES;self.caption.minimumScaleFactor=.75;
         [self.glass addSubview:self.caption];self.actionID=action;
@@ -75,10 +93,16 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
 }
 -(void)setChosen:(BOOL)chosen {
     _chosen=chosen;
-    self.glass.blurView.contentView.backgroundColor=chosen?
-        [UIColor colorWithWhite:1 alpha:.18]:[UIColor colorWithRed:.08 green:.10 blue:.14 alpha:.08];
+    [self updateAppearance];
     self.caption.font=[UIFont systemFontOfSize:16 weight:chosen?UIFontWeightBold:UIFontWeightSemibold];
     self.accessibilityTraits=UIAccessibilityTraitButton|(chosen?UIAccessibilityTraitSelected:0);
+}
+-(void)setProminent:(BOOL)prominent {_prominent=prominent;[self updateAppearance];}
+-(void)setHighlighted:(BOOL)highlighted {[super setHighlighted:highlighted];[self updateAppearance];}
+-(void)updateAppearance {
+    BOOL selected=self.chosen || self.highlighted;
+    self.glass.backgroundColor=[UIColor colorWithWhite:1 alpha:selected?.18:self.prominent?.14:.07];
+    self.glass.layer.borderColor=[UIColor colorWithWhite:1 alpha:selected?.5:self.prominent?.30:.12].CGColor;
 }
 -(void)setEnabled:(BOOL)enabled {[super setEnabled:enabled];self.caption.alpha=enabled?1:.35;}
 @end
@@ -98,7 +122,7 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
 -(instancetype)initWithFrame:(CGRect)frame {
     if((self=[super initWithFrame:frame])) {
         self.backgroundColor=UIColor.clearColor;self.contentView.backgroundColor=UIColor.clearColor;
-        self.glass=inventorySurface(22);self.glass.userInteractionEnabled=NO;[self.contentView addSubview:self.glass];
+        self.glass=inventorySurface(12);self.glass.userInteractionEnabled=NO;[self.contentView addSubview:self.glass];
         self.picture=[UIImageView new];self.picture.contentMode=UIViewContentModeScaleAspectFit;
         [self.glass addSubview:self.picture];
         self.nameLabel=inventoryLabel(17,UIFontWeightSemibold);self.nameLabel.textAlignment=NSTextAlignmentCenter;
@@ -108,9 +132,9 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
         self.teamLabel=inventoryLabel(11,UIFontWeightBold);self.teamLabel.textAlignment=NSTextAlignmentRight;
         for(UILabel *label in @[self.nameLabel,self.finishLabel,self.teamLabel])[self.glass addSubview:label];
         self.selectionBorder=[UIView new];self.selectionBorder.userInteractionEnabled=NO;
-        self.selectionBorder.layer.cornerRadius=22;self.selectionBorder.layer.cornerCurve=kCACornerCurveContinuous;
-        self.selectionBorder.layer.borderColor=[UIColor colorWithWhite:1 alpha:.85].CGColor;
-        self.selectionBorder.layer.borderWidth=1.5;[self.contentView addSubview:self.selectionBorder];
+        self.selectionBorder.layer.cornerRadius=12;self.selectionBorder.layer.cornerCurve=kCACornerCurveContinuous;
+        self.selectionBorder.layer.borderColor=[UIColor colorWithWhite:1 alpha:.5].CGColor;
+        self.selectionBorder.layer.borderWidth=1;[self.contentView addSubview:self.selectionBorder];
         self.isAccessibilityElement=YES;self.accessibilityTraits=UIAccessibilityTraitButton;
     }return self;
 }
@@ -118,10 +142,12 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
     self.contentView.hidden=[row[@"placeholder"] boolValue];self.knifeSide=[row[@"side"] integerValue];
     self.actionID=row[@"id"];self.nameLabel.text=row[@"name"];self.finishLabel.text=row[@"subtitle"];
     self.picture.image=inventoryImage(row[@"image"]);
+    if(row[@"sticker"] && [row[@"sticker"] intValue]==0) {self.picture.image=[UIImage systemImageNamed:@"xmark.circle"];self.picture.tintColor=UIColor.whiteColor;}
     BOOL ct=[row[@"equipped_ct"] boolValue],t=[row[@"equipped_t"] boolValue];
     BOOL equipped=self.knifeSide?(self.knifeSide==3?ct:t):(ct||t);
     self.teamLabel.text=self.knifeSide?((self.knifeSide==3?ct:t)?@"已装备":@""):(ct&&t?@"CT · T":ct?@"CT":t?@"T":@"");
     self.selectionBorder.hidden=![row[@"selected"] boolValue];
+    self.glass.backgroundColor=[UIColor colorWithWhite:1 alpha:[row[@"selected"] boolValue]?.18:.07];
     self.accessibilityLabel=[NSString stringWithFormat:@"%@，%@%@",row[@"name"]?:@"",row[@"subtitle"]?:@"",
         equipped?[NSString stringWithFormat:@"，%@ 已装备",self.teamLabel.text]:@""];
     self.accessibilityIdentifier=self.actionID;
@@ -192,6 +218,12 @@ static ICSMTranslucentSurface *inventorySurface(CGFloat radius) {
 @property(nonatomic,strong) NSMutableDictionary<NSString*,NSValue*> *scrollOffsets;
 @property(nonatomic,copy) NSString *scrollKey;
 @property(nonatomic) BOOL skins;
+@property(nonatomic) BOOL stickers;
+@property(nonatomic,strong) UIView *stickerControls;
+@property(nonatomic,strong) UIScrollView *stickerSlotScroll;
+@property(nonatomic,strong) NSArray<ICSMInventoryButton*> *stickerButtons;
+@property(nonatomic,strong) UITextField *stickerSearch;
+@property(nonatomic,strong) NSArray<NSDictionary*> *allStickerRows;
 @property(nonatomic) BOOL knifeSplit;
 @property(nonatomic) BOOL contextMenuActive;
 @property(nonatomic,strong) UILongPressGestureRecognizer *longPress;
@@ -211,30 +243,30 @@ static ICSMGlassInventory *glassInventory;
         self.container=[UIView new];self.container.clipsToBounds=YES;[self addSubview:self.container];
         UIView *content=self.container;
         self.headerContainer=[UIView new];[content addSubview:self.headerContainer];
-        self.titleLabel=inventoryLabel(28,UIFontWeightBold);self.titleLabel.textAlignment=NSTextAlignmentCenter;[self.headerContainer addSubview:self.titleLabel];
+        self.titleLabel=inventoryLabel(28,UIFontWeightSemibold);self.titleLabel.textAlignment=NSTextAlignmentCenter;[self.headerContainer addSubview:self.titleLabel];
         self.leftFilters=[UIScrollView new];self.rightFilters=[UIScrollView new];
         for(UIScrollView *scroll in @[self.leftFilters,self.rightFilters]) {
             scroll.showsHorizontalScrollIndicator=NO;scroll.showsVerticalScrollIndicator=NO;
             scroll.contentInsetAdjustmentBehavior=UIScrollViewContentInsetAdjustmentNever;[self.headerContainer addSubview:scroll];
         }
-        NSArray *names=@[@"全部",@"手枪",@"冲锋枪",@"步枪",@"狙击枪",@"霰弹枪",@"机枪",@"刀具"];
-        NSArray *keys=@[@"all",@"secondary",@"smg",@"rifle",@"sniper",@"shotgun",@"machinegun",@"melee"];
+        NSArray *names=@[@"全部",@"手枪",@"冲锋枪",@"步枪",@"狙击枪",@"霰弹枪",@"机枪",@"刀具",@"手套"];
+        NSArray *keys=@[@"all",@"secondary",@"smg",@"rifle",@"sniper",@"shotgun",@"machinegun",@"melee",@"gloves"];
         NSMutableArray *filters=[NSMutableArray array];
         for(NSUInteger i=0;i<names.count;++i) {
             ICSMInventoryButton *button=[[ICSMInventoryButton alloc] initWithText:names[i] action:[@"OfflineCategory_" stringByAppendingString:keys[i]]];
-            [(i<4?self.leftFilters:self.rightFilters) addSubview:button];[filters addObject:button];
+            [self.leftFilters addSubview:button];[filters addObject:button];
         }self.filters=filters;
         self.hintLabel=inventoryLabel(14,UIFontWeightRegular);self.hintLabel.textColor=[UIColor colorWithWhite:1 alpha:.72];
         self.hintLabel.text=@"点按选择皮肤 · 长按查看阵营／装备";[content addSubview:self.hintLabel];
         self.statusLabel=inventoryLabel(14,UIFontWeightRegular);self.statusLabel.textColor=[UIColor colorWithWhite:1 alpha:.75];[content addSubview:self.statusLabel];
         self.backButton=[[ICSMInventoryButton alloc] initWithText:@"‹ 返回库存" action:@"OfflineInventoryBack"];[self.headerContainer addSubview:self.backButton];
-        // Reused frosted cells obey the scroll viewport's bounds clipping.
-        // Their foreground pictures/labels stay outside the effect view.
+        // Reused ordinary cards obey the same scroll viewport clipping.
         self.gridContainer=[UIView new];self.gridContainer.clipsToBounds=YES;
         [content addSubview:self.gridContainer];
         UICollectionViewFlowLayout *layout=[UICollectionViewFlowLayout new];layout.minimumInteritemSpacing=16;layout.minimumLineSpacing=16;
         self.grid=[[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
         self.grid.backgroundColor=UIColor.clearColor;self.grid.opaque=NO;self.grid.delegate=self;self.grid.dataSource=self;
+        self.grid.keyboardDismissMode=UIScrollViewKeyboardDismissModeOnDrag;
         self.grid.alwaysBounceVertical=YES;self.grid.showsHorizontalScrollIndicator=NO;self.grid.indicatorStyle=UIScrollViewIndicatorStyleWhite;
         self.grid.contentInsetAdjustmentBehavior=UIScrollViewContentInsetAdjustmentNever;
         [self.grid registerClass:ICSMInventoryCell.class forCellWithReuseIdentifier:@"Weapon"];
@@ -248,7 +280,7 @@ static ICSMGlassInventory *glassInventory;
         self.longPress.minimumPressDuration=.45;self.longPress.allowableMovement=10;self.longPress.delegate=self;
         [self.grid addGestureRecognizer:self.longPress];
         self.skinHeader=[UIView new];[content addSubview:self.skinHeader];
-        self.skinPreviewGlass=inventorySurface(22);[self.skinHeader addSubview:self.skinPreviewGlass];
+        self.skinPreviewGlass=inventorySurface(12);[self.skinHeader addSubview:self.skinPreviewGlass];
         self.skinPreview=[UIImageView new];self.skinPreview.contentMode=UIViewContentModeScaleAspectFit;[self.skinPreviewGlass addSubview:self.skinPreview];
         self.skinName=inventoryLabel(22,UIFontWeightSemibold);self.skinName.adjustsFontSizeToFitWidth=YES;self.skinName.minimumScaleFactor=.7;
         self.skinCount=inventoryLabel(14,UIFontWeightRegular);self.skinCount.textColor=[UIColor colorWithWhite:1 alpha:.75];
@@ -259,21 +291,60 @@ static ICSMGlassInventory *glassInventory;
         self.previous=[[ICSMInventoryButton alloc] initWithText:@"‹ 上一页" action:@"OfflineSkinPrevious"];
         self.next=[[ICSMInventoryButton alloc] initWithText:@"下一页 ›" action:@"OfflineSkinNext"];
         self.confirm=[[ICSMInventoryButton alloc] initWithText:@"确认并装备" action:@"OfflineSkinConfirm"];
+        self.confirm.prominent=YES;
         self.pageNumber=inventoryLabel(16,UIFontWeightSemibold);self.pageNumber.textAlignment=NSTextAlignmentCenter;
         for(UIView *v in @[self.previous,self.next,self.confirm,self.pageNumber])[self.skinFooter addSubview:v];
+        self.stickerControls=[UIView new];[content addSubview:self.stickerControls];
+        self.stickerSlotScroll=[UIScrollView new];self.stickerSlotScroll.showsHorizontalScrollIndicator=NO;
+        [self.stickerControls addSubview:self.stickerSlotScroll];
+        NSMutableArray *slots=[NSMutableArray array];
+        for(int n=0;n<5;++n) {
+            ICSMInventoryButton *button=[[ICSMInventoryButton alloc] initWithText:[NSString stringWithFormat:@"位置 %d",n+1]
+                action:[NSString stringWithFormat:@"OfflineStickerSlot%d",n]];
+            [self.stickerSlotScroll addSubview:button];[slots addObject:button];
+        }self.stickerButtons=slots;
+        self.stickerSearch=[UITextField new];self.stickerSearch.placeholder=@"搜索贴纸";
+        self.stickerSearch.font=[UIFont systemFontOfSize:16];self.stickerSearch.textColor=UIColor.whiteColor;
+        self.stickerSearch.backgroundColor=[UIColor colorWithWhite:1 alpha:.07];
+        self.stickerSearch.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;self.stickerSearch.layer.borderWidth=.5;
+        self.stickerSearch.layer.cornerRadius=12;self.stickerSearch.layer.cornerCurve=kCACornerCurveContinuous;
+        self.stickerSearch.clearButtonMode=UITextFieldViewModeWhileEditing;
+        self.stickerSearch.autocorrectionType=UITextAutocorrectionTypeNo;self.stickerSearch.autocapitalizationType=UITextAutocapitalizationTypeNone;
+        UIView *padding=[[UIView alloc] initWithFrame:CGRectMake(0,0,12,1)];self.stickerSearch.leftView=padding;self.stickerSearch.leftViewMode=UITextFieldViewModeAlways;
+        self.stickerSearch.returnKeyType=UIReturnKeyDone;
+        [self.stickerSearch addTarget:self action:@selector(filterStickers) forControlEvents:UIControlEventEditingChanged];
+        [self.stickerSearch addTarget:self action:@selector(endStickerSearch) forControlEvents:UIControlEventEditingDidEndOnExit];
+        [self.stickerControls addSubview:self.stickerSearch];
         self.rows=@[];
     }return self;
+}
+-(void)endStickerSearch {[self.stickerSearch resignFirstResponder];}
+-(void)filterStickers {
+    if(!self.stickers)return;
+    NSString *query=[self.stickerSearch.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if(!query.length)self.rows=self.allStickerRows;
+    else {
+        NSMutableArray *filtered=[NSMutableArray array];
+        for(NSDictionary *row in self.allStickerRows)
+            if([row[@"sticker"] intValue]==0 || [row[@"name"] localizedStandardContainsString:query])[filtered addObject:row];
+        self.rows=filtered;
+    }
+    self.pageNumber.text=[NSString stringWithFormat:@"%lu 项",(unsigned long)self.rows.count];
+    [self.grid reloadData];
 }
 -(void)applySnapshot:(NSDictionary*)snapshot {
     if(self.contextMenuActive) {self.pendingSnapshot=snapshot;return;}
     if(self.scrollKey)self.scrollOffsets[self.scrollKey]=[NSValue valueWithCGPoint:self.grid.contentOffset];
-    NSString *key=[snapshot[@"mode"] isEqual:@"skins"]?
+    BOOL stickers=[snapshot[@"mode"] isEqual:@"stickers"];
+    NSString *key=stickers?[NSString stringWithFormat:@"stickers-%@-%@",snapshot[@"skin"][@"definition"],snapshot[@"stickers"][@"paint"]]:[snapshot[@"mode"] isEqual:@"skins"]?
         [NSString stringWithFormat:@"skins-%@-%@",snapshot[@"skin"][@"definition"],snapshot[@"skin"][@"page"]]:
         [@"inventory-" stringByAppendingString:snapshot[@"category"]?:@"all"];
-    self.snapshot=snapshot;self.skins=[snapshot[@"mode"] isEqual:@"skins"];
-    self.knifeSplit=[snapshot[@"mode"] isEqual:@"knives"];
-    self.titleLabel.text=snapshot[@"title"];self.statusLabel.text=snapshot[@"status"];
+    if(!stickers || ![self.scrollKey isEqualToString:key]) {self.stickerSearch.text=@"";[self endStickerSearch];}
+    self.stickers=stickers;self.snapshot=snapshot;self.skins=stickers || [snapshot[@"mode"] isEqual:@"skins"];
+    self.knifeSplit=[snapshot[@"mode"] isEqual:@"knives"] || [snapshot[@"mode"] isEqual:@"gloves"];
+    self.titleLabel.text=snapshot[@"title"];self.titleLabel.hidden=!self.skins;self.statusLabel.text=snapshot[@"status"];
     self.rows=[snapshot[@"items"] isKindOfClass:NSArray.class]?snapshot[@"items"]:@[];
+    if(stickers) {self.allStickerRows=self.rows;[self filterStickers];}
     // Replace cached counts/index paths before any frame/column change can
     // synchronously lay out the grid against the new, often shorter array.
     [self.grid reloadData];
@@ -284,19 +355,36 @@ static ICSMGlassInventory *glassInventory;
     NSDictionary *skin=snapshot[@"skin"];
     if(self.skins) {
         self.skinPreview.image=inventoryImage(skin[@"image"]);self.skinName.text=skin[@"name"];
-        BOOL shared=[skin[@"shared"] boolValue],knife=[skin[@"knife"] boolValue];
+        BOOL shared=[skin[@"shared"] boolValue],saveOnly=[skin[@"save_only"] boolValue];
+        BOOL glove=[skin[@"glove"] boolValue];
         NSString *affiliation=shared?@"双方共用":([skin[@"team"] intValue]==3?@"警方":@"匪徒");
-        self.skinCount.text=[NSString stringWithFormat:@"%@ · 共 %@ 种外观 · %@",affiliation,skin[@"total"],knife?@"保存皮肤后长按刀具装备":@"确认后保存到本机"];
+        self.skinCount.text=[NSString stringWithFormat:@"%@ · 共 %@ 种外观 · %@",affiliation,skin[@"total"],saveOnly?(glove?@"保存皮肤后长按手套装备":@"保存皮肤后长按刀具装备"):@"确认后保存到本机"];
         self.ctButton.enabled=[skin[@"ct"] boolValue];self.tButton.enabled=[skin[@"t"] boolValue];
         BOOL locked=shared || [skin[@"locked_team"] boolValue] || ![skin[@"ct"] boolValue] || ![skin[@"t"] boolValue];
         self.ctButton.hidden=self.tButton.hidden=locked;
         self.ctButton.chosen=[skin[@"team"] intValue]==3;self.tButton.chosen=[skin[@"team"] intValue]==2;
         self.previous.enabled=[skin[@"previous"] boolValue];self.next.enabled=[skin[@"next"] boolValue];
         self.confirm.enabled=[skin[@"confirm"] boolValue];
-        self.confirm.caption.text=knife?@"确认皮肤":@"确认并装备";self.confirm.accessibilityLabel=self.confirm.caption.text;
+        self.confirm.caption.text=saveOnly?@"确认皮肤":@"确认并装备";self.confirm.accessibilityLabel=self.confirm.caption.text;
         self.pageNumber.text=[NSString stringWithFormat:@"%@ / %@",skin[@"page"],skin[@"pages"]];
     } else self.skinPreview.image=nil;
-    self.leftFilters.hidden=self.skins;self.rightFilters.hidden=self.skins;self.hintLabel.hidden=self.skins || self.knifeSplit;
+    self.stickerControls.hidden=!stickers;self.backButton.caption.text=stickers?@"‹ 返回皮肤":@"‹ 返回库存";
+    self.previous.hidden=self.next.hidden=stickers;
+    if(stickers) {
+        NSDictionary *selection=snapshot[@"stickers"];NSArray *slots=selection[@"slots"];
+        self.ctButton.hidden=self.tButton.hidden=YES;
+        self.skinCount.text=[NSString stringWithFormat:@"原版 %lu 个槽位 · %@ · 共 %@ 款贴纸",(unsigned long)slots.count,
+            [skin[@"shared"] boolValue]?@"双方共用":@"专属枪械",skin[@"total"]];
+        for(NSUInteger n=0;n<self.stickerButtons.count;++n) {
+            ICSMInventoryButton *button=self.stickerButtons[n];button.hidden=n>=slots.count;
+            if(n>=slots.count)continue;NSDictionary *slot=slots[n];
+            button.caption.text=[NSString stringWithFormat:@"位置 %lu%@",(unsigned long)n+1,[slot[@"sticker"] intValue]?@" · 已贴":@""];
+            button.chosen=[slot[@"selected"] boolValue];button.accessibilityLabel=[NSString stringWithFormat:@"%@，%@",button.caption.text,slot[@"name"]];
+        }
+        self.confirm.caption.text=skin[@"confirm_text"]?:@"确认贴纸";self.confirm.accessibilityLabel=self.confirm.caption.text;
+        self.pageNumber.text=[NSString stringWithFormat:@"%lu 项",(unsigned long)self.rows.count];
+    }
+    self.leftFilters.hidden=self.skins;self.rightFilters.hidden=YES;self.hintLabel.hidden=self.skins || self.knifeSplit;
     self.knifeDivider.hidden=self.knifeCTLabel.hidden=self.knifeTLabel.hidden=!self.knifeSplit;
     self.backButton.hidden=!self.skins;self.skinHeader.hidden=!self.skins;self.skinFooter.hidden=!self.skins;
     [self setNeedsLayout];[self layoutIfNeeded];[self.grid layoutIfNeeded];
@@ -315,20 +403,21 @@ static ICSMGlassInventory *glassInventory;
     // The parent scales fonts/cards on phones. Keep actionable chips at least
     // 44 physical UIKit points, including inside their clipping scroll views.
     CGFloat buttonH=44/SourceTouchMenuUIScale(),extra=buttonH-44;
-    CGFloat header=(compact?52:64)+extra,gap=16,titleWidth=104,wing=(w-titleWidth-2*gap)/2;
+    CGFloat header=(compact?52:64)+extra;
     self.headerContainer.frame=CGRectMake(0,0,w,header);
-    self.titleLabel.frame=CGRectMake((w-titleWidth)*.5,4,titleWidth,header-8);
-    if(self.skins)self.titleLabel.frame=CGRectMake(std::min<CGFloat>(160,w*.2),4,std::max<CGFloat>(0,w-2*std::min<CGFloat>(160,w*.2)),header-8);
-    self.leftFilters.frame=CGRectMake(0,compact?4:8,wing,buttonH);self.rightFilters.frame=CGRectMake(w-wing,compact?4:8,wing,buttonH);
-    CGFloat chip=std::clamp((wing-24)/4,(CGFloat)70,(CGFloat)128),filterWidth=chip*4+24;
-    CGFloat leading=std::max((CGFloat)0,(wing-filterWidth)*.5);
-    for(NSUInteger i=0;i<self.filters.count;++i) self.filters[i].frame=CGRectMake(leading+(i%4)*(chip+8),0,chip,buttonH);
-    self.leftFilters.contentSize=self.rightFilters.contentSize=CGSizeMake(filterWidth+2*leading,buttonH);
+    self.titleLabel.frame=CGRectMake(std::min<CGFloat>(160,w*.2),4,std::max<CGFloat>(0,w-2*std::min<CGFloat>(160,w*.2)),header-8);
+    self.leftFilters.frame=CGRectMake(0,compact?4:8,w,buttonH);self.rightFilters.frame=CGRectZero;
+    CGFloat count=std::max<NSUInteger>(1,self.filters.count),chip=std::max((CGFloat)70,(w-8*(count-1))/count);
+    for(NSUInteger i=0;i<self.filters.count;++i) {
+        self.filters[i].frame=CGRectMake(i*(chip+8),0,chip,buttonH);
+    }
+    self.leftFilters.contentSize=CGSizeMake(count*(chip+8)-8,buttonH);
     self.backButton.frame=CGRectMake(0,compact?4:8,std::min<CGFloat>(150,w*.2),buttonH);
     self.hintLabel.frame=CGRectMake(4,header,w-8,24);
     CGFloat statusHeight=compact?20:24,footer=self.skins?((compact?52:64)+extra):0;
     CGFloat skinHeight=self.skins?(compact?56:std::clamp(h*.2,(CGFloat)88,(CGFloat)124)):0;
-    CGFloat gridTop=self.skins?header+skinHeight+(compact?8:16):header+(compact?32:40);
+    CGFloat stickerHeight=self.stickers?buttonH+12:0;
+    CGFloat gridTop=self.skins?header+skinHeight+stickerHeight+(compact?8:16):header+(compact?32:40);
     CGFloat gridHeight=std::max((CGFloat)0,h-gridTop-statusHeight-footer-(compact?6:8));
     CGFloat centerGap=self.knifeSplit?32:16;
     UICollectionViewFlowLayout *flow=(UICollectionViewFlowLayout*)self.grid.collectionViewLayout;
@@ -342,8 +431,8 @@ static ICSMGlassInventory *glassInventory;
         [self.grid.collectionViewLayout invalidateLayout];
     }
     self.statusLabel.frame=CGRectMake(4,h-statusHeight,w-8,statusHeight);
-    self.knifeDivider.frame=CGRectMake(floor(w*.5),CGRectGetMaxY(self.titleLabel.frame),1,
-        std::max((CGFloat)0,gridTop+gridHeight-CGRectGetMaxY(self.titleLabel.frame)));
+    self.knifeDivider.frame=CGRectMake(floor(w*.5),header,1,
+        std::max((CGFloat)0,gridTop+gridHeight-header));
     self.knifeCTLabel.frame=CGRectMake(0,header,(w-32)*.5,32);
     self.knifeTLabel.frame=CGRectMake((w+32)*.5,header,(w-32)*.5,32);
     self.skinHeader.frame=CGRectMake(0,header,w,skinHeight);
@@ -367,6 +456,12 @@ static ICSMGlassInventory *glassInventory;
         self.ctButton.frame=CGRectMake(textX,skinHeight-teamHeight,96,teamHeight);
         self.tButton.frame=CGRectMake(textX+108,skinHeight-teamHeight,96,teamHeight);
     }
+    self.stickerControls.frame=CGRectMake(0,header+skinHeight+6,w,buttonH);
+    CGFloat slotWidth=std::min<CGFloat>(w*.68,5*116),slotChip=std::min<CGFloat>(108,(slotWidth-32)/5);
+    self.stickerSlotScroll.frame=CGRectMake(0,0,slotWidth,buttonH);
+    for(NSUInteger n=0;n<self.stickerButtons.count;++n)self.stickerButtons[n].frame=CGRectMake(n*(slotChip+8),0,slotChip,buttonH);
+    self.stickerSlotScroll.contentSize=CGSizeMake(self.snapshot[@"stickers"]? [self.snapshot[@"stickers"][@"slots"] count]*(slotChip+8):0,buttonH);
+    self.stickerSearch.frame=CGRectMake(slotWidth+16,0,std::max<CGFloat>(0,w-slotWidth-16),buttonH);
     self.skinFooter.frame=CGRectMake(0,h-statusHeight-footer,w,footer);
     CGFloat buttonWidth=std::min<CGFloat>(128,w*.16);
     CGFloat footerInset=compact?4:8;
@@ -396,22 +491,24 @@ static ICSMGlassInventory *glassInventory;
 -(BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer*)gesture {
     if(gesture!=self.longPress)return YES;
     NSIndexPath *index=[self.grid indexPathForItemAtPoint:[gesture locationInView:self.grid]];
-    return !self.skins && !self.contextMenuActive && index && index.item<self.rows.count && ![self.rows[index.item][@"placeholder"] boolValue];
+    return !self.contextMenuActive && index && index.item<self.rows.count && ![self.rows[index.item][@"placeholder"] boolValue] &&
+        (!self.skins || [self.rows[index.item][@"sticker_action"] length]);
 }
 -(void)longPress:(UILongPressGestureRecognizer*)gesture {
-    if(gesture.state!=UIGestureRecognizerStateBegan || self.skins || self.contextMenuActive)return;
+    if(gesture.state!=UIGestureRecognizerStateBegan || self.contextMenuActive)return;
     NSIndexPath *index=[self.grid indexPathForItemAtPoint:[gesture locationInView:self.grid]];
     if(!index || index.item>=self.rows.count)return;
     NSDictionary *row=self.rows[index.item];
     BOOL ctEligible=[row[@"ct"] boolValue],tEligible=[row[@"t"] boolValue];
-    if(!ctEligible && !tEligible)return;
+    BOOL stickerMenu=[row[@"sticker_action"] length]>0;
+    if(!stickerMenu && !ctEligible && !tEligible)return;
     UICollectionViewCell *cell=[self.grid cellForItemAtIndexPath:index];if(!cell || !host)return;
     CGRect anchor=[cell convertRect:cell.bounds toView:host];
     ++inventoryMenus;BOOL shared=ctEligible && tEligible;NSInteger side=[row[@"side"] integerValue];
-    NSString *mode=side?@"equip-knife":(shared?@"equip-team":@"exclusive-team");
+    NSString *mode=stickerMenu?@"stickers":side?([row[@"kind"] isEqual:@"gloves"]?@"equip-glove":@"equip-knife"):(shared?@"equip-team":@"exclusive-team");
     inventoryLastMenu=@{@"definition":row[@"definition"]?:@0,@"ct":@(ctEligible),@"t":@(tEligible),
         @"mode":mode,@"side":@(side),
-        @"labels":side?@[side==3?@"为警方装备":@"为匪徒装备",@"取消"]:(shared?@[@"为警方装备",@"为匪徒装备"]:@[ctEligible?@"警方专属":@"匪徒专属"])};
+        @"labels":stickerMenu?@[@"贴纸",@"取消"]:side?@[side==3?@"为警方装备":@"为匪徒装备",@"取消"]:(shared?@[@"为警方装备",@"为匪徒装备"]:@[ctEligible?@"警方专属":@"匪徒专属"])};
     fprintf(stderr,"ICSM_GLASS_INVENTORY menu definition=%d ct=%d t=%d mode=%s material=translucent-fill\n",
         [row[@"definition"] intValue],ctEligible,tEligible,mode.UTF8String);
     self.contextMenuActive=YES;
@@ -447,7 +544,7 @@ static ICSMGlassInventory *glassInventory;
     }
     CGRect f=self.frame;
     CGRect viewport=[self.gridContainer convertRect:self.gridContainer.bounds toView:host];
-    return @{@"backend":@"UIBlurEffectStyleSystemThinMaterialDark / reused frosted cards",@"visual_effect_views":@(translucentEffectCount(self)+translucentEffectCount(self.popup)),@"visible":@(!self.hidden),
+    return @{@"backend":@"shared Source neutral frost / settings-style translucent cards",@"visual_effect_views":@(translucentEffectCount(self)+translucentEffectCount(self.popup)),@"visible":@(!self.hidden),
         @"mode":self.snapshot[@"mode"]?:@"",@"category":self.snapshot[@"category"]?:@"",@"title":self.titleLabel.text?:@"",
         @"items":@(self.rows.count),@"total":self.snapshot[@"total"]?:@0,@"columns":@(self.columns),@"knife_split":@(self.knifeSplit),
         @"knife_divider_points":@[@(self.knifeDivider.frame.origin.x),@(self.knifeDivider.frame.origin.y),@(self.knifeDivider.frame.size.width),@(self.knifeDivider.frame.size.height)],
@@ -470,10 +567,24 @@ static ICSMGlassInventory *glassInventory;
 }
 @end
 
+static void trimInventoryMemory() {
+    if(!NSThread.isMainThread)return;
+    [inventoryImages removeAllObjects];
+    if(inventoryVisible)return;
+    [glassInventory dismissMenu];[glassInventory removeFromSuperview];glassInventory=nil;
+    inventoryJSON.clear();
+    inventoryDiagnostics=@{@"visible":@NO,@"resources_released":@YES,@"resource_trims":@(++inventoryResourceTrims)};
+}
 static void updateInventoryLayout() {
     if(!NSThread.isMainThread || !glassInventory)return;
     bool show=inventoryVisible && host && host.window && !editing && !consoleVisible;
+    if(inventoryVisible)inventoryHiddenSince=0;
+    else {
+        if(!inventoryHiddenSince)inventoryHiddenSince=now();
+        if(now()-inventoryHiddenSince>=10) {trimInventoryMemory();return;}
+    }
     glassInventory.hidden=!show;
+    if(!show)[glassInventory endStickerSearch];
     if(!show && glassInventory.contextMenuActive)[glassInventory dismissMenu];
     if(show) {
         if(glassInventory.superview!=host)[host addSubview:glassInventory];
@@ -517,7 +628,7 @@ extern "C" bool SourceTouchUpdateInventory(const char *json,bool visible) {
     if(glassInventory && json && json[0] && inventoryJSON!=json) {
         NSData *data=[[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
         id value=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;
-        if([value isKindOfClass:NSDictionary.class] && [value[@"categories"] isKindOfClass:NSArray.class] && [value[@"categories"] count]==8) {
+        if([value isKindOfClass:NSDictionary.class] && [value[@"categories"] isKindOfClass:NSArray.class] && [value[@"categories"] count]==9) {
             inventoryJSON=json;++inventorySnapshots;[glassInventory applySnapshot:value];
         }
     }

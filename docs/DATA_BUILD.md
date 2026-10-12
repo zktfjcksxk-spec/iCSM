@@ -48,7 +48,7 @@ python3 scripts/join_data.py Build/release/iCSM-v1.zip.parts.json
 
 Generate shaders **before** compiling the app; the first command updates its manifest. The final ZIP is in `Build/release/`. Signed local builds can use the existing setup/build flow after shader generation.
 
-**Status:** this newly added full-data workflow has not been executed. No local IPA or data build verification was performed for its addition. Previous successful Build 149 runs apply only to the existing app-only workflow.
+**Status:** this newly added full-data workflow has not been executed. Build200 now has a separately published, locally verified IPA/data pair; this does not certify a cloud run. Previous successful Build 149 runs apply only to the existing app-only workflow.
 
 ## 简体中文
 
@@ -63,4 +63,4 @@ Generate shaders **before** compiling the app; the first command updates its man
 
 **IPA 与数据包必须来自同一次完整构建。** 新编译的着色器可能改变校验值，旧 iCloud 包不一定匹配。原 **Build iCSM IPA** 流程仍用于原冻结版本。
 
-**验证状态：** 新完整流程尚未运行，本次没有执行本地构建验证。此前已通过的 Build 149 云编译只证明原 IPA 工作流；新流程的结果以实际 GitHub Actions 运行为准。
+**验证状态：** 完整云流程尚未运行；Build200 另有本地导出并验证的配套 IPA／数据发布，不能据此宣称云流程通过。此前已通过的 Build 149 云编译只证明原 IPA 工作流；新流程的结果以实际 GitHub Actions 运行为准。

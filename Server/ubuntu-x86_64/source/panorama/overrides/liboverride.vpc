@@ -1,0 +1,45 @@
+
+//-----------------------------------------------------------------------------
+//	GAMEOVERLAYRENDERER.VPC
+//
+//	Project Script
+//		OSX only = Too many differences from Win32 baseline project to share
+//-----------------------------------------------------------------------------
+
+$macro SRCDIR		"..\.."
+
+$macro TARGETNAME	"liboverride"
+
+$macro OUTBINNAME	"liboverride"
+
+$include "$SRCDIR\vpc_scripts\steam_dll_base.vpc"
+$include "$SRCDIR\vpc_scripts\steam_copy_target_client_dll.vpc"
+$include "$SRCDIR\tier0\tier0_s_exclude.vpc"
+$include "$SRCDIR\vstdlib\vstdlib_s_exclude.vpc"
+
+$Configuration
+{
+	$Compiler
+	{
+		$PreprocessorDefinitions			"$BASE;DONT_WRAP_FILEIO"
+		$AdditionalIncludeDirectories		"/usr/include;/usr/include/$(MULTIARCH_LIB_PATH);/usr/include/freetype2;"
+	}
+	
+	$Linker
+	{
+		$GCC_ExtraLinkerFlags				"-L/usr/lib32 -L/usr/lib -L/usr/lib/$(MULTIARCH_LIB_PATH)" [$LINUX]
+	}
+}
+
+$Project "liboverride"
+{
+	$Folder "Source Files"
+	{
+		$File "override.c"
+	}
+	$Folder "Header Files"
+	{
+		$File "override.h"
+	}
+}
+

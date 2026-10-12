@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "build": 200,
+  "renderer_revision": 198,
+  "installed_device_model": "iPad17,1",
+  "settings_entry": "设置 → 视频设置 → 插帧性能测试",
+  "quick_maps": [
+    "de_mirage",
+    "de_inferno",
+    "de_dust2"
+  ],
+  "quick_samples": 36,
+  "full_maps_available": 12,
+  "full_map_test_executed": false,
+  "touch_ui_retained_during_measurement": true,
+  "all_samples_5v5": true,
+  "gpu_errors": 0,
+  "summaries": [
+    {
+      "stable": false,
+      "samples": 12,
+      "minimum_render_fps": 59.98089952503071,
+      "minimum_display_fps": 97.3009718483136,
+      "worst_interval_p95_ms": 16.666750074364245,
+      "color_scale": 50,
+      "worst_render_buffer_gpu_ms": 9.632216412062697,
+      "worst_missed_refresh_fraction": 0.2091038406827881
+    },
+    {
+      "stable": false,
+      "samples": 12,
+      "minimum_render_fps": 57.73561776615413,
+      "minimum_display_fps": 58.53652621804173,
+      "worst_interval_p95_ms": 25.000125053338706,
+      "color_scale": 67,
+      "worst_render_buffer_gpu_ms": 10.832027489312976,
+      "worst_missed_refresh_fraction": 0.9834123222748815
+    },
+    {
+      "stable": false,
+      "samples": 12,
+      "minimum_render_fps": 54.8303446388766,
+      "minimum_display_fps": 54.832484725221505,
+      "worst_interval_p95_ms": 25.00008326023817,
+      "color_scale": 75,
+      "worst_render_buffer_gpu_ms": 11.694561751772758,
+      "worst_missed_refresh_fraction": 0.9974747474747475
+    }
+  ],
+  "selected_color_detail_scale": 50,
+  "stable_120_passed": false,
+  "recommendation_kind": "conservative; current high preset misses 120Hz targets in some scenes",
+  "functional_validation": {
+    "build": 200,
+    "saved_profile_apply": true,
+    "cancel_restore": true,
+    "forced_kill_recovery": true,
+    "recovery_checkpoint_cleared": true,
+    "archived_preferences_and_bindings_unchanged": true,
+    "automatic_menu_music_variant_changes": [
+      "snd_music_selection"
+    ],
+    "changed_keys": [],
+    "final_phase": "recovered_after_interruption"
+  },
+  "aligned_capture_validation": {
+    "paired_source_frames": 1,
+    "motion_resolution": [
+      1408,
+      970
+    ],
+    "motion_all_finite": true,
+    "motion_max_pixels": 101.375,
+    "reprojected_in_bounds_fraction": 0.8363307663410969,
+    "depth_consistent_fraction_of_valid": 0.9907638752421325,
+    "depth_error_median": 9.111899175295868e-06,
+    "quality_motion_guard": true
+  },
+  "ui_validation": {
+    "settings_button_event_opens_native_dialog": true,
+    "quick_full_previous_results_and_cancel_visible": true,
+    "physical_finger_buttons_not_verified_by_mirroring": true
+  },
+  "preserved": [
+    "current scene resolution",
+    "material quality",
+    "weapon detail",
+    "inventory",
+    "controller bindings",
+    "touch aim preferences"
+  ],
+  "motion_changes": [
+    "finite full camera vectors instead of 256px clipping",
+    "previous-depth occlusion rejection",
+    "stronger image-motion confidence threshold",
+    "45-degree camera-cut history reset"
+  ],
+  "limitations": [
+    "Fixed spawn-region sweeps are not full competitive matches.",
+    "Only the quick three-map run was completed on this device.",
+    "Protected viewmodel animation remains at the native rate.",
+    "Per-device results apply only to the measured quality, resolution, OS and renderer revision."
+  ],
+  "sources": [
+    "https://developer.apple.com/videos/play/wwdc2025/211/",
+    "Local iPhoneOS SDK MetalFX.framework/Headers/MTLFXFrameInterpolator.h",
+    "Source engine host.cpp Host_WriteConfiguration asynchronous config writes",
+    "Source game/shared/cstrike15/cs_gamerules.cpp:19868 automatic menu music variant rotation"
+  ]
+}

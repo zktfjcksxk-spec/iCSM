@@ -1,0 +1,100 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+const float4 g_Const0 : register( c0 );
+const float4 g_Const1 : register( c1 );
+const float4 g_Const2 : register( c2 );
+
+const float4x4 g_viewMatrix : register( c11 );
+const float4x4 g_invViewMatrix : register( c15 );
+
+sampler Tex1Sampler0 : register( s0 );
+sampler DepthSampler : register( s1 );
+
+//#define g_vBlurScreenOrigin	g_Const0.xy
+#define g_vBlurSceneDepth	g_Const0.y
+#define g_vBlurScale		g_Const0.z
+#define g_vCamera			g_Const1.xyz
+#define g_vCameraDelta		g_Const2.xyz
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+float3 posFromDepth( float2 vUV )
+{
+	float flDepth = tex2D( DepthSampler, vUV ).r;
+	
+	//clip( 0.9999f - flDepth );
+	
+	float x = vUV.x * 2 - 1;
+	float y = (1 - vUV.y) * 2 - 1;
+	
+	float4 vProjectedPos = float4(x, y, flDepth, 1.0f);
+	float4 vPositionVS = mul(vProjectedPos, g_invViewMatrix);
+	
+	return (vPositionVS.xyz / vPositionVS.w);
+}
+
+float2 uvFromPosition( float3 vPos )
+{
+	float4 vPosWorking = float4( vPos, 1 );
+	float4 vTemp = mul( vPosWorking, g_viewMatrix );
+	
+	float3 vProjectedPos = vTemp.xyz / vTemp.w;
+	
+	vProjectedPos.x = (vProjectedPos.x + 1) * 0.5;
+	vProjectedPos.y = (vProjectedPos.y + 1) * 0.5;
+	vProjectedPos.y = 1 - vProjectedPos.y;
+
+	return vProjectedPos.xy;
+}
+
+float4 main( PS_INPUT i ) : COLOR
+{	
+
+	float3 cOut = float3(0,0,0);
+
+	float3 worldPixelPos = posFromDepth( i.vBaseUV );
+	
+	//float4 vScreenCamDelta = mul( float4( g_vCameraDelta, 0 ), g_viewMatrix );
+	//float2 vTempUV = i.vBaseUV;
+	//vTempUV.x = vTempUV.x * 2 - 1;
+	//vTempUV.y = (1 - vTempUV.y) * 2 - 1;
+	//
+	//float4 vScreenCamCenter = mul( float4( vTempUV, 0.5, 1 ), g_viewMatrix );
+	//
+	//float4 vScreenCamTheta = (vScreenCamDelta + vScreenCamCenter);
+	//vScreenCamTheta.xyz /= vScreenCamTheta.w;
+	//
+	//vScreenCamCenter.xyz /= vScreenCamCenter.w;
+	//
+	//float2 vUVDelta = normalize( vScreenCamTheta.xy - vScreenCamCenter.xy );
+	//vUVDelta.y = -vUVDelta.y;
+	
+	float flDist = length( g_vCamera - worldPixelPos );
+	float flScale = g_vBlurScale * smoothstep( g_vBlurSceneDepth, 10, flDist );
+	clip( flScale - 0.0001 );
+	
+	int k;
+	for ( k=-12; k<12; k++ )
+	{
+		
+		//float2 vSamplePos = i.vBaseUV + vUVDelta * k * 0.001;
+		//cOut += tex2D( Tex1Sampler0, vSamplePos );
+		
+		float3 vSamplePos = worldPixelPos + g_vCameraDelta * k * flScale;
+		cOut += tex2D( Tex1Sampler0, saturate( uvFromPosition( vSamplePos ) ) );
+		
+   		//cOut += tex2D( Tex1Sampler0, i.vBaseUV.xy + ( vBlurDir * ( k * flClampedDeltaLen * g_vBlurScale * 0.002 ) ) );		
+		//float3 samplePixelPos = posFromDepth( i.vBaseUV );
+	}
+	cOut *= 0.041666;
+	
+	//cOut.g *= 0.3;
+	
+	return float4( cOut.rgb, 1 );
+}
+

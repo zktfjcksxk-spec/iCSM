@@ -16,9 +16,26 @@ fragment FGDepthOut fg_depth(FGVertex v [[stage_in]],depth2d<float> depth [[text
 float2 camera_motion(float2 uv,float z,constant FGCamera &c) {
     if(c.reset)return float2(0);
     float4 previous=c.reprojection*float4(uv.x*2-1,1-uv.y*2,z,1);
-    if(abs(previous.w)<1e-6)return float2(0);
+    if((c.pad && previous.w<=1e-6) || abs(previous.w)<1e-6)return float2(0);
     float2 oldUV=previous.xy/previous.w*float2(.5,-.5)+.5;
-    return clamp((oldUV-uv)*float2(c.size),float2(-256),float2(256));
+    float2 velocity=(oldUV-uv)*float2(c.size);
+    // The bound texture is RG16Float. Retain large real motion without
+    // overflowing half storage when previous projection lies far offscreen.
+    return c.pad ? (all(isfinite(velocity))?clamp(velocity,float2(-65000),float2(65000)):float2(0)) :
+        clamp(velocity,float2(-256),float2(256));
+}
+// A residual estimated on a coarse patch must not cross a depth discontinuity.
+// Compare projected previous Z against the actual previous depth. The tolerance
+// scales with (1-Z), approximately preserving a 3% view-depth tolerance.
+bool fg_depth_consistent(float2 uv,float z,depth2d<float> previousDepth,constant FGCamera &c) {
+    constexpr sampler point(coord::normalized,address::clamp_to_edge,filter::nearest);
+    float4 previous=c.reprojection*float4(uv.x*2-1,1-uv.y*2,z,1);
+    if(previous.w<=1e-6)return false;
+    float3 ndc=previous.xyz/previous.w;
+    float2 oldUV=ndc.xy*float2(.5,-.5)+.5;
+    if(any(oldUV<0.f) || any(oldUV>1.f) || ndc.z<0.f || ndc.z>1.f)return false;
+    float oldZ=previousDepth.sample(point,oldUV);
+    return abs(oldZ-ndc.z)<=max(0.00002f,abs(1.f-ndc.z)*.03f);
 }
 float luminance(float3 c) { return dot(c,float3(.2126,.7152,.0722)); }
 kernel void fg_resize(texture2d<float> color [[texture(0)]],texture2d<float,access::write> output [[texture(1)]],
@@ -94,16 +111,19 @@ float patch_error(texture2d<float> current,texture2d<float> previous,
 kernel void fg_flow(texture2d<float> current [[texture(0)]],texture2d<float> previous [[texture(1)]],
                     depth2d<float> depth [[texture(2)]],texture2d<float,access::write> flow [[texture(3)]],
                     texture2d<float> mask [[texture(4)]],texture2d<float> previousMask [[texture(5)]],
+                    depth2d<float> previousDepth [[texture(6)]],
                     constant FGCamera &c [[buffer(0)]],uint2 p [[thread_position_in_grid]]) {
     if(p.x>=flow.get_width() || p.y>=flow.get_height())return;
     constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);
     float2 uv=(float2(p)+.5)/float2(flow.get_width(),flow.get_height());
     if(c.reset || max(mask.sample(s,uv).r,previousMask.sample(s,uv).r)>.5f){flow.write(float4(0),p);return;}
-    float2 base=camera_motion(uv,depth.sample(s,uv),c),best=base;
+    float z=depth.sample(s,uv);
+    if(c.pad && !fg_depth_consistent(uv,z,previousDepth,c)){flow.write(float4(0),p);return;}
+    float2 base=camera_motion(uv,z,c),best=base;
     float error=patch_error(current,previous,uv,best,float2(c.size)),cameraError=error;
     float zero=patch_error(current,previous,uv,float2(0),float2(c.size));
     if(zero+0.002f<error){best=float2(0);error=zero;}
-    if(!c.reset && error>.008f) {
+    if(!c.reset && error>(c.pad?.12f:.008f)) {
         // Coarse-to-fine, bounded +/-21 pixel residual search. All vectors
         // follow MetalFX's current-pixel -> previous-pixel convention.
         for(int level=0;level<3;level++) {
@@ -118,12 +138,15 @@ kernel void fg_flow(texture2d<float> current [[texture(0)]],texture2d<float> pre
             }
         }
     }
+    if(c.pad && !(cameraError>.12f && error<cameraError*.65f && cameraError-error>.08f))
+        best=base;
     flow.write(float4(best-base,error,cameraError),p);
 }
 kernel void fg_motion(depth2d<float> depth [[texture(0)]],texture2d<float> flow [[texture(1)]],
                       texture2d<float,access::write> motion [[texture(2)]],
                       texture2d<float> current [[texture(3)]],texture2d<float> previous [[texture(4)]],
                       texture2d<float> mask [[texture(5)]],texture2d<float> previousMask [[texture(6)]],
+                      depth2d<float> previousDepth [[texture(7)]],
                       constant FGCamera &c [[buffer(0)]],constant uint &refine [[buffer(1)]],
                       uint2 p [[thread_position_in_grid]]) {
     if(p.x>=c.size.x || p.y>=c.size.y)return;
@@ -137,22 +160,42 @@ kernel void fg_motion(depth2d<float> depth [[texture(0)]],texture2d<float> flow 
         // depth edges and preserves exact camera motion in static geometry.
         constexpr sampler point(coord::normalized,address::clamp_to_edge,filter::nearest);
         float4 f=flow.sample(point,uv);
-        if(f.w-f.z>.01f) {
+        if(f.w-f.z>(c.pad?.08f:.01f) && (!c.pad || fg_depth_consistent(uv,depth.read(p),previousDepth,c))) {
             float a=current.sample(s,uv).r;
             float old=previous.sample(s,uv+velocity/float2(c.size)).r;
             float refined=previous.sample(s,uv+(velocity+f.xy)/float2(c.size)).r;
-            if(abs(a-refined)+.015f<abs(a-old))velocity+=f.xy;
+            float oldError=abs(a-old),newError=abs(a-refined);
+            if(c.pad ? (newError+.025f<oldError && newError<oldError*.75f) : newError+.015f<oldError)
+                velocity+=f.xy;
         }
     }
     motion.write(float4(c.reset?float2(0):velocity,0,0),p);
 }
-fragment float4 fg_copy(FGVertex v [[stage_in]],texture2d<float> color [[texture(0)]],
-                        constant float4 *gamma [[buffer(0)]]) {
-    constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
-    float4 c=color.sample(s,v.uv);
+float4 fg_gamma(float4 c,constant float4 *gamma) {
     float3 q=clamp(c.rgb,0.0f,1.0f)*255;
     uint3 a=uint3(floor(q)),b=min(a+1,uint3(255));float3 f=fract(q);
     c.rgb=float3(mix(gamma[a.x].x,gamma[b.x].x,f.x),
                  mix(gamma[a.y].y,gamma[b.y].y,f.y),mix(gamma[a.z].z,gamma[b.z].z,f.z));
     return c;
+}
+fragment float4 fg_copy(FGVertex v [[stage_in]],texture2d<float> color [[texture(0)]],
+                        constant float4 *gamma [[buffer(0)]]) {
+    constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
+    return fg_gamma(color.sample(s,v.uv),gamma);
+}
+// Compose the native-resolution UI and actual weapon coverage at presentation.
+// This is the same coverage rule as fg_protect_viewmodel, fused with the copy
+// and gamma draw that every drawable already needs. No extra full-screen
+// generated-texture read/modify/write pass during gameplay.
+fragment float4 fg_present_generated(FGVertex v [[stage_in]],texture2d<float> generated [[texture(0)]],
+                        texture2d<float,access::read> current [[texture(1)]],
+                        texture2d<float,access::read> scene [[texture(2)]],
+                        texture2d<float> currentMask [[texture(3)]],texture2d<float> previousMask [[texture(4)]],
+                        constant float4 *gamma [[buffer(0)]],constant uint &protect [[buffer(1)]]) {
+    constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);
+    const uint2 p=min(uint2(v.position.xy),uint2(current.get_width()-1,current.get_height()-1));
+    float4 ui=current.read(p);
+    bool overlay=any(ui.rgb!=scene.read(p).rgb) ||
+        (protect && max(currentMask.sample(s,v.uv).r,previousMask.sample(s,v.uv).r)>.5f);
+    return fg_gamma(overlay?ui:generated.sample(s,v.uv),gamma);
 }

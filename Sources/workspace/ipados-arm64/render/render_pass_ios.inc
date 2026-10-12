@@ -8,7 +8,7 @@
         for(unsigned i=0;i<4;++i) {
             auto a=sourcePass.colorAttachments[i];auto s=dev->m_pRenderTargets[i];
             auto texture=targetTexture(s,d.state.rs[D3DRS_SRGBWRITEENABLE]!=0);
-            if(a.texture!=texture)return false;
+            if(a.texture!=texture){perfCount(PerfCount::AttachmentPassBreaks);return false;}
             if(s && (a.level!=native<Image>(s).mip || a.slice!=native<Image>(s).face))return false;
         }
         auto ds=dev->m_pDepthStencil;
@@ -22,19 +22,29 @@
         // checking unused sampler bindings as well is deliberately conservative.
         for(auto sampled:dev->m_textures)if(sampled) {
             auto texture=native<Image>(sampled).image->texture;
-            if(texture==depth)return false;
-            for(auto s:dev->m_pRenderTargets)if(s && native<Image>(s).image->texture==texture)return false;
+            if(texture==depth){perfCount(PerfCount::SampleAliasPassBreaks);return false;}
+            for(auto s:dev->m_pRenderTargets)if(s && native<Image>(s).image->texture==texture){perfCount(PerfCount::SampleAliasPassBreaks);return false;}
         }
         sourcePassBindingsDirty=false;return true;
     }
-    static id<MTLDepthStencilState> clearDepthState(bool depthWrite,bool stencilWrite,
-                                                  MTLDepthStencilDescriptor *descriptor) {
+    static id<MTLDepthStencilState> clearDepthState(bool depthWrite,bool stencilWrite,bool reuse) {
         // These four immutable states contain no texture or stencil-reference
         // binding. Metal states belong to the singleton native GPU, so video
         // resets and maps can reuse them without retaining map resources.
         static std::array<id<MTLDepthStencilState>,4> states{};
         auto &state=states[(depthWrite?1:0)|(stencilWrite?2:0)];
-        if(!state) {perfCount(PerfCount::ClearDepthAllocations);state=[device() newDepthStencilStateWithDescriptor:descriptor];}
+        if(state && reuse)return state;
+        auto descriptor=[MTLDepthStencilDescriptor new];descriptor.depthCompareFunction=MTLCompareFunctionAlways;
+        descriptor.depthWriteEnabled=depthWrite;
+        if(stencilWrite) {
+            auto st=[MTLStencilDescriptor new];st.stencilCompareFunction=MTLCompareFunctionAlways;
+            st.depthStencilPassOperation=MTLStencilOperationReplace;st.readMask=st.writeMask=0xff;
+            descriptor.frontFaceStencil=descriptor.backFaceStencil=st;
+        }
+        perfCount(PerfCount::ClearDepthAllocations);
+        auto result=[device() newDepthStencilStateWithDescriptor:descriptor];
+        if(!reuse)return result;
+        state=result;
         if(!state)fatal("clear depth state",@"creation failed");
         return state;
     }

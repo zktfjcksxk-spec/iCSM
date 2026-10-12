@@ -60,7 +60,7 @@ var SettingsMenu = (function () {
         if (activeTab === "VideoSettings" && control && action !== "state") {
             var allowed = { ICSMFrameRateLimit: true, MotionBlur: true, ICSMSkinShaderDetail: true,
                             ICSMSkinTextureDetail: true, ICSMQualityHigh: true, ICSMQualityVeryLow: true,
-                            ICSMQualityLow: true, ICSMQualityMedium: true, ICSMFrameInterpolation: true };
+                            ICSMQualityLow: true, ICSMQualityMedium: true, ICSMFrameInterpolation: true, ICSMFrameCalibration: true };
             if (!allowed[id] || !control.enabled) { $.Msg("ICSM_SETTINGS_LOCKED ", id); return; }
         }
         if (action === "reset" && activeTab === "AudioSettings") {

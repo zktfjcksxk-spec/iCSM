@@ -135,6 +135,10 @@ NSURL *ICSMDiagnosticsCreateArchive(NSString *documents,NSString *evidence,NSErr
    else {id object=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];data=object?jsonData(object):nil;}
    if(data)entries[name]=data;else [omitted addObject:name];
   }
+  // Calibration contains timing/GPU samples, never the recovery preferences.
+  NSData *calibration=boundedRead([evidence stringByAppendingPathComponent:@"frame-calibration.json"],NO);
+  id calibrationJSON=calibration?[NSJSONSerialization JSONObjectWithData:calibration options:0 error:nil]:nil;
+  if([calibrationJSON isKindOfClass:NSDictionary.class])entries[@"frame-calibration.json"]=jsonData(calibrationJSON);
   NSString *reports=[evidence stringByAppendingPathComponent:@"system-reports"];
   NSUInteger count=0;for(NSString *name in [[fm contentsOfDirectoryAtPath:reports error:nil] sortedArrayUsingSelector:@selector(compare:)]) {
    if(++count>5)break;if(![name hasPrefix:@"report-"] || ![name hasSuffix:@".json"])continue;

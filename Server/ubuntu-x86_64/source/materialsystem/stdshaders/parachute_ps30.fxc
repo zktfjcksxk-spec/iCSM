@@ -1,0 +1,47 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+const float4 g_Const0 : register( c0 );
+
+sampler Sampler0 : register( s0 );
+//sampler Sampler1 : register( s1 );
+
+#define g_flAmount	g_Const0.x
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+float4 main( PS_INPUT i ) : COLOR
+{
+	float2 vUV = i.vBaseUV;
+	
+	float2 vToCenter = vUV - float2(0.5,0.5);
+	float2 vToCenterNorm = normalize( vToCenter );
+	float flLenToCenter = length( vToCenter );
+	
+	float flDistortBias = pow( flLenToCenter, 3.5 );
+	vUV -= vToCenterNorm * flDistortBias * g_flAmount * 0.1;
+	
+	float2 vToCenterChromaOffset = vToCenterNorm * pow( smoothstep( 0.05, 1, flLenToCenter ), 0.5 ) * g_flAmount * 0.4;
+	
+	float flR = tex2D( Sampler0, vUV - vToCenterChromaOffset * 0.01 ).r;
+	float flG = tex2D( Sampler0, vUV - vToCenterChromaOffset * 0.015 ).g;
+	float flB = tex2D( Sampler0, vUV - vToCenterChromaOffset * 0.02 ).b;
+	
+	float3 cOut = float3( flR, flG, flB );
+	
+	// desat
+	float flDesat = dot(cOut, float3(0.3,0.59,0.11));
+	cOut.rgb = lerp( cOut.rgb, pow(flDesat.rrr,1.5), g_flAmount * 0.3 );
+	
+	cOut.rgb *= 1.0 + (g_flAmount * 0.4);
+	
+	// bars
+	cOut.rgb *= step( abs(0.5 - i.vBaseUV.y), 0.5 - (g_flAmount * 0.05) );
+	
+	return float4( cOut.rgb, 1 );
+}
+

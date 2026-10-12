@@ -1,0 +1,90 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// DYNAMIC: "COMPRESSED_VERTS"				"0..1"
+// DYNAMIC: "DYNAMIC_LIGHT"					"0..1"
+// DYNAMIC: "NUM_LIGHTS"					"0..4" 
+
+#include "common_fog_vs_supportsvertexfog_fxc.h"
+
+#include "common_vs_fxc.h"
+
+const float4x4 g_FlashlightWorldToTexture	: register( SHADER_SPECIFIC_CONST_6 ); // 6, 7, 8, 9
+
+struct VS_INPUT
+{
+	float4 vPos				: POSITION;
+	float4 vBoneWeights		: BLENDWEIGHT;
+	float4 vBoneIndices		: BLENDINDICES;
+	float4 vNormal			: NORMAL;
+
+	#if VERTEXCOLOR
+		float4 vColor			: COLOR0;
+	#else
+		float4 vStaticLight		: COLOR1;
+		#if STATICLIGHT3
+			float4 vStaticLight2		: COLOR2;
+			float4 vStaticLight3		: COLOR3;
+		#endif
+	#endif
+
+	// make these float2's and stick the [n n 0 1] in the dot math.
+	float4 vTexCoord0		: TEXCOORD0;
+	float4 vTexCoord1		: TEXCOORD1;
+	float4 vTexCoord2		: TEXCOORD2;
+	float4 vTexCoord3		: TEXCOORD3;
+	
+	// Position and normal/tangent deltas
+	float3 vPosFlex			: POSITION1;
+	float3 vNormalFlex		: NORMAL1;
+	#if ( SFM )
+		float vVertexID			: POSITION2;
+	#endif
+};
+
+
+struct VS_OUTPUT
+{
+	// Stuff that isn't seen by the pixel shader
+	float4 projPos										: POSITION;	
+
+	// Stuff that is seen by the pixel shader
+	float4 vWorldNormal									: TEXCOORD0;
+	float4 color  										: TEXCOORD1;	
+	float4 vProjPos										: TEXCOORD2;	
+	float4 vWorldPos									: TEXCOORD3;
+	float4 flashlightSpacePos							: TEXCOORD4;
+};
+
+VS_OUTPUT main( const VS_INPUT v )
+{
+	VS_OUTPUT o = ( VS_OUTPUT ) 0 ;
+
+	float3 worldPos;
+
+	float4 vPosition = v.vPos;
+	float3 vNormal = 0;
+
+	DecompressVertex_Normal( v.vNormal, vNormal );
+	
+	SkinPositionAndNormal( false, vPosition, vNormal, v.vBoneWeights, v.vBoneIndices, worldPos, o.vWorldNormal.xyz );
+
+	o.vWorldNormal.xyz = normalize( o.vWorldNormal.xyz );
+
+	o.color = float4( 0.0f, 0.0f, 0.0f, 0.0f );
+		
+	#if ( ( FLATTEN_STATIC_CONTROL_FLOW == 0 ) || defined ( SHADER_MODEL_VS_3_0 ) )
+		o.color.xyz = DoLighting( worldPos, o.vWorldNormal.xyz, float3( 0.0f, 0.0f, 0.0f ), false, true, false );
+	#else
+		o.color.xyz = DoLightingUnrolled( worldPos, o.vWorldNormal.xyz, float3( 0.0f, 0.0f, 0.0f ), false, true, false, NUM_LIGHTS );
+	#endif
+					
+	// Transform into projection space
+	o.projPos = mul( float4( worldPos, 1 ), cViewProj );
+	o.vProjPos = o.projPos;
+
+	o.vWorldPos.xyz = worldPos;
+	
+	o.flashlightSpacePos = TransformFlashlightWorldToTexture( worldPos, g_FlashlightWorldToTexture );
+
+	return o;
+}

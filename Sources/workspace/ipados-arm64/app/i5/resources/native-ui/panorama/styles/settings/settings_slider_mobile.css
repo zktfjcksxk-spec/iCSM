@@ -3,35 +3,80 @@
 CSGOSettingsSlider
 {
     width: 100%;
-    height: 56px;
+    height: 112px;
 }
 
 #ICSMSettingsSliderRow
 {
     width: 100%;
     height: 100%;
-    flow-children: right;
+    flow-children: down;
 }
 
 #ICSMSettingsSliderRow #Title
 {
-    width: 60%;
+    width: 100%;
+    height: 36px;
     font-size: 22px;
     color: white;
     vertical-align: center;
     white-space: normal;
 }
 
+#ICSMSettingsSliderInputRow
+{
+    width: 100%;
+    height: 68px;
+    flow-children: right;
+}
+
 #ICSMSettingsSliderRow #Slider
 {
-    width: 25.5%;
+    width: fill-parent-flow(1);
+    height: 64px;
+    margin-right: 24px;
     vertical-align: center;
+}
+
+#ICSMSettingsSliderRow #SliderTrack,
+#ICSMSettingsSliderRow #SliderTrackProgress
+{
+    height: 8px;
+    vertical-align: center;
+    border-radius: 4px;
+    border: 0px solid transparent;
+}
+
+#ICSMSettingsSliderRow #SliderTrack
+{
+    width: 100%;
+    background-color: rgba(255,255,255,0.22);
+}
+
+#ICSMSettingsSliderRow #SliderTrackProgress
+{
+    background-color: rgba(255,255,255,0.78);
+}
+
+#ICSMSettingsSliderRow #SliderThumb
+{
+    width: 36px;
+    height: 36px;
+    vertical-align: center;
+    border-radius: 18px;
+    background-color: white;
+    border: 1px solid rgba(0,0,0,0.16);
+    box-shadow: none;
 }
 
 #ICSMSettingsSliderRow TextEntry#Value
 {
-    width: 96px;
-    font-size: 22px;
+    width: 104px;
+    height: 52px;
+    font-size: 24px;
     color: white;
     vertical-align: center;
+    background-color: rgba(255,255,255,0.09);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
 }

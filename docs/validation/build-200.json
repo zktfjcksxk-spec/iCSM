@@ -1,0 +1,36 @@
+{
+  "version": "0.7.2",
+  "build": 200,
+  "ipa": {
+    "ipa": "iCSM-unsigned.ipa",
+    "sha256": "53751dc74832b757ecd7ffef9cd560fde26dd17c1bb1937965025cb880804337",
+    "bytes": 154432218,
+    "version": "0.7.2",
+    "build": "200",
+    "bundle_id": "com.icsm.client",
+    "frameworks": 35,
+    "verified_arm64_ios_binaries": 36,
+    "signing": "ad-hoc; personal re-signing required",
+    "data_identity": "0a90cd9c9999298657a0886329a55ee816497f740d5eed98f4cde6ca9dc141c4",
+    "shader_count": 7906,
+    "source_commit": ""
+  },
+  "data": {
+    "size": 11108546131,
+    "sha256": "e574196b1bb615a094c264283565ab0168c489c6d3999a572d4051fbcdea5b1f",
+    "data_identity": "0a90cd9c9999298657a0886329a55ee816497f740d5eed98f4cde6ca9dc141c4",
+    "files": 12698,
+    "shader_count": 7906,
+    "parts": 11,
+    "zip_crc_verified": true,
+    "parts_and_join_sha256_verified": true,
+    "compatible_with_previously_verified_data": true
+  },
+  "mobile_sources": {
+    "native_jobs": 3862,
+    "frameworks": 35,
+    "missing_explicit_build_inputs": 0
+  },
+  "cloud_build_200_executed": false,
+  "ubuntu_runtime_tested": false
+}

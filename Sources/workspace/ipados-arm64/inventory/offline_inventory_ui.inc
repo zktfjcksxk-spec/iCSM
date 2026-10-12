@@ -1,10 +1,13 @@
 #include "offline_loadout.h"
 #include "offline_skin.h"
+#include "offline_stickers.h"
+#include "offline_gloves.h"
 #include "c_cs_player.h"
 #include "weapon_csbase.h"
 #include "offline_skin_quality.h"
 #include "materialsystem/imaterialvar.h"
 #include "materialsystem/itexture.h"
+#include "offline_sticker_preview.inc"
 #include "network_inventory_client.inc"
 
 static ConVar icsm_skin_shader_detail("icsm_skin_shader_detail", "1", FCVAR_ARCHIVE | FCVAR_RELEASE,
@@ -49,17 +52,26 @@ class CNativeOfflineInventory
         // Original 2019 CDN icons are SHA-1 checked against items_game_cdn.txt
         // and bundled locally. Browsing never creates persistent reference
         // items or asynchronous 3D composite jobs for hundreds of recipes.
-        CFmtStr path("file://{images}/offline_skins/%d_%d.png", definition, paint);
+        CUtlString path=ICSMStickerPreview::cache.Image(definition,paint);
         CreateJSOEntry_String(row, "image", path.Get());
     }
 public:
     void JSRegisterFunc();
+    int GetPreviewRevision() {return 0;}
+    const char *GetPreview(int definition,int paint) {
+        static CUtlString image;image=ICSMStickerPreview::cache.Image(definition,paint);return image.Get();
+    }
     int GetSkin(int team, int definition)
     {
+        if(ICSMGloves::Definition(team,definition))return ICSMGloves::Read(team,definition).paint;
         return ICSMSkin::Read(team, definition).paint;
     }
     bool SaveSkin(int team, int definition, int paint)
     {
+        if(ICSMGloves::Definition(team,definition)) {
+            if(!ICSMGloves::Save(team,ICSMGloves::Trial(team,definition,paint),false))return false;
+            ICSMGloves::Changed();return true;
+        }
         const ICSMSkin::Selection skin = ICSMSkin::Trial(definition, paint);
         if (!ICSMSkin::Save(team, definition, skin)) return false;
         icsmNetworkInventory.Changed();
@@ -69,6 +81,10 @@ public:
     }
     bool EquipSkin(int team, int definition, int paint)
     {
+        if(ICSMGloves::Definition(team,definition)) {
+            if(!ICSMGloves::Save(team,ICSMGloves::Trial(team,definition,paint),true))return false;
+            ICSMGloves::Changed();Msg("ICSM_GLOVE_SELECTED team=%d definition=%d paint=%d\n",team,definition,paint);return true;
+        }
         const GameItemDefinition_t *item = ICSMSkin::Definition(team, definition);
         if (!item) return false;
         const ICSMSkin::Selection before = ICSMSkin::Read(team, definition);
@@ -88,6 +104,22 @@ public:
         if (info.Length() != 2 || !info[0]->IsInt32() || !info[1]->IsInt32()) return;
         int team = info[0].As<v8::Int32>()->Value();
         int definition = info[1].As<v8::Int32>()->Value();
+        if(ICSMGloves::Definition(team,definition)) {
+            auto array=v8::Array::New(info.GetIsolate());int count=0;
+            const auto selected=ICSMGloves::Read(team,definition);
+            auto add=[&](int paint,const char *name) {
+                if(!ICSMGloves::Valid(team,ICSMGloves::Trial(team,definition,paint)))return;
+                auto row=v8::Object::New(info.GetIsolate());
+                CreateJSOEntry_Number(row,"paint",paint);CreateJSOEntry_Number(row,"sticker_slots",0);
+                CreateJSOEntry_String(row,"name",name);CreateJSOEntry_Number(row,"selected",paint==selected.paint?1:0);
+                AddPreview(row,definition,paint);array->Set(info.GetIsolate()->GetCurrentContext(),count++,row).Check();
+            };
+            if(ICSMGloves::Custom(definition)) {
+                for(const auto &entry:ICSMGloves::Catalog)
+                    if(entry.definition==definition)add(entry.paint,entry.name);
+            } else add(0,"默认手套（恢复地图原配）");
+            info.GetReturnValue().Set(array);return;
+        }
         if (!ICSMSkin::Definition(team, definition)) return;
         const ICSMSkin::Selection selected = ICSMSkin::Read(team, definition);
         auto array = v8::Array::New(info.GetIsolate());
@@ -97,6 +129,7 @@ public:
             if (!ICSMSkin::Valid(team, definition, ICSMSkin::Trial(definition, paint))) return;
             auto row = v8::Object::New(info.GetIsolate());
             CreateJSOEntry_Number(row, "paint", paint);
+            CreateJSOEntry_Number(row, "sticker_slots", ICSMStickers::Slots(definition));
             CreateJSOEntry_String(row, "name", name);
             CreateJSOEntry_Number(row, "selected", selected.paint == paint ? 1 : 0);
             AddPreview(row, definition, paint);
@@ -110,8 +143,50 @@ public:
         }
         info.GetReturnValue().Set(array);
     }
+    void GetStickerCatalog(const v8::FunctionCallbackInfo<v8::Value>& info)
+    {
+        auto array=v8::Array::New(info.GetIsolate());int count=0;
+        auto add=[&](int id,const char *name) {
+            auto row=v8::Object::New(info.GetIsolate());CreateJSOEntry_Number(row,"sticker",id);
+            CreateJSOEntry_String(row,"name",name);
+            CFmtStr path("file://{images}/offline_stickers/sticker_%d.png",id);
+            CreateJSOEntry_String(row,"image",id?path.Get():"");
+            array->Set(info.GetIsolate()->GetCurrentContext(),count++,row).Check();
+        };
+        add(0,"移除贴纸");
+        for(unsigned i=0;i<sizeof(ICSMStickers::Kits)/sizeof(ICSMStickers::Kits[0]);++i) {
+            const ICSMStickers::Kit &kit=ICSMStickers::Kits[i];
+            if(GetItemSchema()->GetStickerKitDefinition(kit.id))add(kit.id,kit.name);
+        }
+        info.GetReturnValue().Set(array);
+    }
+    void GetStickerSlots(const v8::FunctionCallbackInfo<v8::Value>& info)
+    {
+        if(info.Length()!=3)return;
+        int team=info[0]->Int32Value(info.GetIsolate()->GetCurrentContext()).FromMaybe(-1);
+        int definition=info[1]->Int32Value(info.GetIsolate()->GetCurrentContext()).FromMaybe(-1);
+        int paint=info[2]->Int32Value(info.GetIsolate()->GetCurrentContext()).FromMaybe(-1);
+        if(!ICSMSkin::Valid(team,definition,ICSMSkin::Trial(definition,paint)))return;
+        auto array=v8::Array::New(info.GetIsolate());const auto chosen=ICSMStickers::Read(definition,paint);
+        for(int slot=0;slot<ICSMStickers::Slots(definition);++slot) {
+            auto row=v8::Object::New(info.GetIsolate());const auto *kit=ICSMStickers::Find(chosen.ids[slot]);
+            CreateJSOEntry_Number(row,"slot",slot);CreateJSOEntry_Number(row,"sticker",chosen.ids[slot]);
+            CreateJSOEntry_String(row,"name",kit?kit->name:"空槽位");
+            array->Set(info.GetIsolate()->GetCurrentContext(),slot,row).Check();
+        }info.GetReturnValue().Set(array);
+    }
+    bool SaveSticker(int team,int definition,int paint,int slot,int id)
+    {
+        if(!ICSMStickers::Save(team,definition,paint,slot,id))return false;
+        icsmNetworkInventory.Changed();
+        Msg("ICSM_STICKER_SAVED team=%d definition=%d paint=%d slot=%d id=%d\n",team,definition,paint,slot,id);return true;
+    }
     bool Equip(int team, int slot, int index)
     {
+        if(const auto *glove=ICSMGloves::Definition(team,index)) {
+            if(slot!=glove->GetLoadoutSlot(team) || !ICSMGloves::Save(team,ICSMGloves::Read(team,index),true))return false;
+            ICSMGloves::Changed();return true;
+        }
         if (!ICSMLoadout::Definition(team, slot, index)) return false;
         CCSPlayerInventory *inventory = CSInventoryManager()->GetLocalCSInventory();
         if (!CSInventoryManager()->EquipItemInLoadout(team, slot,
@@ -173,16 +248,35 @@ public:
                 equipped->GetItemDefinition()->GetDefinitionIndex() == index ? 1 : 0);
             array->Set(info.GetIsolate()->GetCurrentContext(), count++, item).Check();
         }
+        const auto selectedGlove=ICSMGloves::Read(team);
+        for(int index:ICSMGloves::Definitions) {
+            const auto *def=ICSMGloves::Definition(team,index);if(!def)continue;
+            const auto skin=ICSMGloves::Read(team,index);
+            auto item=v8::Object::New(info.GetIsolate());
+            CreateJSOEntry_Number(item,"definition",index);CreateJSOEntry_Number(item,"slot",def->GetLoadoutSlot(team));
+            CreateJSOEntry_String(item,"name",def->GetItemBaseName());CreateJSOEntry_String(item,"kind","gloves");
+            CreateJSOEntry_String(item,"category","clothing_hands");CreateJSOEntry_Number(item,"paint",skin.paint);
+            AddPreview(item,index,skin.paint);
+            const auto *recipe=ICSMGloves::FindCatalog(index,skin.paint);
+            CreateJSOEntry_String(item,"skin_name",recipe?recipe->name:"地图默认手套");
+            CreateJSOEntry_Number(item,"equipped",selectedGlove.definition==index?1:0);
+            array->Set(info.GetIsolate()->GetCurrentContext(),count++,item).Check();
+        }
         info.GetReturnValue().Set(array);
     }
 };
 
 PANORAMA_COMPONENT_API_DEF_BEGIN(CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_API_DEF(int, GetPreviewRevision, CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_API_DEF(const char *, GetPreview, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(int, GetSkin, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, SaveSkin, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, EquipSkin, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetSkins, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetInventory, CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetStickerCatalog, CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetStickerSlots, CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, SaveSticker, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, Equip, CNativeOfflineInventory)
 PANORAMA_COMPONENT_API_DEF_END(CNativeOfflineInventory)
 
@@ -340,4 +434,16 @@ CON_COMMAND_F(icsm_skin_options, "Validate every bundled skin against the live 2
         Msg("ICSM_SKIN_OPTION definition=%d paint=%d ct=%d t=%d wear=%.6f\n", trial.definition, trial.paint, ct, t, recipe.wear);
     }
     Msg("ICSM_SKIN_OPTIONS valid=%d expected=%u\n", valid, count);
+}
+
+CON_COMMAND_F(icsm_sticker_state,"Inspect original weapon sticker attributes and materials",FCVAR_RELEASE)
+{
+    C_CSPlayer *player=C_CSPlayer::GetLocalCSPlayer();CWeaponCSBase *weapon=player?player->GetActiveCSWeapon():NULL;
+    CEconItemView *item=weapon?weapon->GetAttributeContainer()->GetItem():NULL;if(!item || !item->IsValid())return;
+    Msg("ICSM_STICKER_STATE definition=%d slots=%d applied=%d\n",weapon->GetItemDefinitionIndex(),item->GetNumSupportedStickerSlots(),item->ItemHasAnyStickersApplied());
+    for(int slot=0;slot<MIN(5,item->GetNumSupportedStickerSlots());++slot) {
+        IMaterial *first=item->GetStickerIMaterialBySlotIndex(slot),*third=item->GetStickerIMaterialBySlotIndex(slot,true);
+        Msg("ICSM_STICKER_SLOT slot=%d id=%u first=%s third=%s model=%s\n",slot,item->GetStickerAttributeBySlotIndexInt(slot,k_EStickerAttribute_ID,0),
+            first&&!first->IsErrorMaterial()?first->GetName():"none",third&&!third->IsErrorMaterial()?third->GetName():"none",item->GetStickerSlotModelBySlotIndex(slot));
+    }
 }

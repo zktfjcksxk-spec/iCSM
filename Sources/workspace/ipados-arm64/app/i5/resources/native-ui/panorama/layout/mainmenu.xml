@@ -20,8 +20,8 @@
 	<snippets>
 		<snippet name="MainMenuMovieSnippet">
 			<Panel>
-
-
+				                                 
+				                                                                                                              
 				<Movie class="mainmenu-movie MainMenuModeOnly" 
 					id="MainMenuMovie"
 					src=""
@@ -54,24 +54,24 @@
 				<Label id="MainMenuNotificationTitle"/>
 			</Panel>
 			<Panel id="MainMenuInput">                                              
-
+				
 				<CSGOBlurTarget id="MainMenuCore" blurrects="ChatLinesContainerBg mainmenu-sidebar__blur-target CSGOLoadingScreen eom-winner">
 					<CSGOBlurTarget id="MainMenuBackground" blurrects= "mainmenu-content__blur-target ICSMConsoleBlurTarget JsNewsPanel id-tournament-pass-status JsStorePanel JsStreamPanel JsWatchNoticePanel">
 						<Panel class="mainmenu-vanity__vignette" hittest="false"/>
-
+						                                                      
 						<CSGOBackbufferImagePanel class="full-width full-height PauseMenuModeOnly" />
 
-
-
-
-
-
+						            
+						                                                       
+						            
+						
+						            
 						<Panel id="MainMenuMovieParent">
-
+							                                                                                      
 						</Panel>
-
+						                
 						<Panel id="MainMenuVanityParent">
-
+							                                                 
 						</Panel>
 					</CSGOBlurTarget>
 
@@ -86,21 +86,21 @@
 					</Panel>
 
 					<Panel id="JsNewsContainer" class="mainmenu_news_container hidden MainMenuModeOnly" >
-
+						                                                       
 					</Panel >
-
+					
 
 					<Panel id="JsMainMenuContent" class="mainmenu-content mainmenu-content--offscreen">
-
+						                                                                                    
 					</Panel>
 				</CSGOBlurTarget>
 
 				<!-- The bottom bar has its own background; it no longer uses the
 				     original side bar's tracked blur rectangles. -->
 				<Panel id="MainMenuNavBarLeft" class="mainmenu-navbar-container">
-
+	
 					<Panel id="JsMainMenuNavBar" class="mainmenu-navbar">
-
+						                                            
 						<RadioButton id="MainMenuNavBarHome"
 									class="mainmenu-navbar__btn-small mainmenu-navbar__btn-home icsm-internal-home MainMenuModeOnly"
 									group="NavBar"
@@ -116,7 +116,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/play_circle.svg" />
 						</RadioButton>
-
+						                                                    
 						<RadioButton id="MainMenuNavBarResumeGame"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									group="NavBar" 
@@ -125,7 +125,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/ResumeGame.svg" />
 						</RadioButton>
-
+						                                                    
 						<Button id="MainMenuNavBarSwitchTeams"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="$.DispatchEvent( 'CSGOMainMenuSwitchTeams' );"
@@ -133,7 +133,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/VoteTeamSwitch.svg" />
 						</Button>
-
+						                                                   
 						<Button id="MainMenuNavBarVote"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="MainMenu.ShowVote()"
@@ -142,7 +142,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/check.svg" />
 						</Button>
-
+						                                                      
 						<Button id="MainMenuNavBarReportServer"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="UiToolkitAPI.ShowCustomLayoutPopupParameters('', 'file://{resources}/layout/popups/popup_report_server.xml', '' );"
@@ -150,7 +150,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/report_server.svg" />
 						</Button>
-
+						                                                      
 						<Button id="MainMenuNavBarShowCommunityServerBrowser"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="GameInterfaceAPI.ConsoleCommand( 'gamemenucommand openserverbrowser' )"
@@ -159,7 +159,7 @@
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
 							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/servers.svg" />
 						</Button>
-
+						                           
 						<RadioButton id="MainMenuNavBarInventory"
 									class="mainmenu-navbar__btn-small"
 									group="NavBar" 
@@ -171,8 +171,8 @@
 								<Label id="MainMenuInvAlertText" class="navbar-btn__notification-text" text=""/>
 							</Panel>
 						</RadioButton>
-
-
+						                                             
+						                                                 
 						<RadioButton id="MainMenuNavBarOverwatch"
 									class="mainmenu-navbar__btn-small MainMenuModeOnly"
 									group="NavBar"
@@ -184,7 +184,7 @@
 								<Label id="MainMenuOverwatchAlertText" class="navbar-btn__notification-text" text="+"/>
 							</Panel>
 						</RadioButton>
-
+						                          
 						<RadioButton id="MainMenuNavBarSettings"
 									class="mainmenu-navbar__btn-small"
 									group="NavBar"
@@ -197,47 +197,47 @@
 							</Panel>
 						</RadioButton>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+						
+						
+						                                          
+						               
+						                                        
+									                                                         
+									              
+									                                                                           
+									                                                                                             
+									                                             
+							                                                                                     
+						              
+						               
+						                                   
+						               
+						                                    
+									                                                        
+									              
+									                                                                          
+									                                                                                           
+									                                             
+							                                                                                       
+						              
+						               
+						                                         
+						               
+						                                          
+									                                                        
+									              
+									                                                                 
+									                                                                                                  
+									                                             
+							                                                                                     
+						              
+						               
+		
 						<Panel id="MainMenuNavBarEnd" class="icsm-navbar-end">
-
-
-
-
+							
+							                                            
+							
+							                                                  
 							<Button id="MainMenuNavBarExitGame"
 										class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 										onactivate="$.DispatchEvent( 'CSGOMainMenuDisconnect' );"
@@ -288,8 +288,8 @@
 								class="mainmenu-sidebar__container"
 								onmouseover="MainMenu.ExpandSidebar()"
 								onmouseout="MainMenu.MinimizeSidebar();">
-
-
+							                                                    
+							                                               
 						</Panel>
 						<Panel class="mainmenu-sidebar__seperator"/>
 					</Panel>
@@ -298,18 +298,18 @@
 					<Frame id="MatchmakingReconnectPanel" src="file://{resources}/layout/match-reconnect.xml" />
 
 				</CSGOBlurTarget>
-
+			
 			</Panel>
-
+			
 		</Panel>
 
-
+		                                                                   
 		<CSGOPopupManager id="PopupManager" onpopupsdismissed="" />
 		<ContextMenuManager id="ContextMenuManager" />
 		<Panel id="ItemPreviewDebugManager" hittest="false" />
 		<CSGOTooltipManager id="TooltipManager" hittest="false" />
 
-
+		                                                                                                             
 		<Panel id="SteamNotificationsPlaceholder" hittest="false" />
 	</CSGOMainMenu>
 </root>

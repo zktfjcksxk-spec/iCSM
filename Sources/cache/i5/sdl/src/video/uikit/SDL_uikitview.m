@@ -425,6 +425,19 @@ extern int SDL_AppleTVRemoteOpenedAsJoystick;
     }
 #endif
 
+#if !TARGET_OS_TV
+    /* iCSM: only physical keyboard presses become keyboard keys. */
+    /* UIPress.key is nil for gamepads. Their axes/buttons already arrive
+       through SDL GameController; do not also synthesize arrows/Enter/Esc. */
+    static unsigned ignoredControllerPresses = 0;
+    if (ignoredControllerPresses < 32) {
+        ++ignoredControllerPresses;
+        fprintf(stderr, "ICSM_CONTROLLER_UI_PRESS_IGNORED type=%ld phase=%ld\n",
+                (long)press.type, (long)press.phase);
+    }
+    return SDL_SCANCODE_UNKNOWN;
+#endif
+
 #ifndef SDL_JOYSTICK_DISABLED
     /* Presses from Apple TV remote */
     if (!SDL_AppleTVRemoteOpenedAsJoystick) {

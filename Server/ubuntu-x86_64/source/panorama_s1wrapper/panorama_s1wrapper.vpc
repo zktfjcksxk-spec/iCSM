@@ -1,0 +1,122 @@
+//-----------------------------------------------------------------------------
+//	PANORAMA_S1WRAPPER.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$macro SRCDIR		".."
+
+$Macro GENERATED_PROTO_DIR	"generated_proto_panorama_s1wrapper"
+
+$include "$SRCDIR/vpc_scripts/source_lib_base.vpc"
+$include "$SRCDIR\vpc_scripts\protobuf_builder.vpc"
+
+$Conditional "SPLIT_PANORAMA_TEXT" "1"
+
+$Macro PANORAMA_USE_S1WRAPPER "1"
+
+
+
+$Configuration
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$AdditionalProjectDependencies			"$BASE;panoramamessages;chromemessages;mathlib;steammessages;libaudio;libvideo;steamclient_client"	[$WINDOWS]
+	}
+
+
+	$Compiler
+	{
+//		$AdditionalIncludeDirectories	"$BASE;../public/mathlib"
+//		$PreprocessorDefinitions		"$BASE;MATHLIB_LIB"
+
+		$PreprocessorDefinitions				"$BASE;_CLIENT;PANORAMA_EXPORTS;STEAM_API_NODLL;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA"
+		$PreprocessorDefinitions				"$BASE;PANORAMA_USE_S1WRAPPER"
+
+		$AdditionalIncludeDirectories			"steamextra\common;steamextra\public;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper;$BASE"
+		$AdditionalIncludeDirectories			"$BASE;$SRCDIR\panorama"
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+		$AdditionalIncludeDirectories			"$BASE;..\public\panorama"
+		$AdditionalIncludeDirectories			"$BASE;..\public"
+		$AdditionalIncludeDirectories			"$BASE;..\public\tier1"
+		$AdditionalIncludeDirectories			"$BASE;..\public\vstdlib"
+		$AdditionalIncludeDirectories			"$BASE;..\common"
+		$AdditionalIncludeDirectories			"$BASE;..\external\$CRYPTOPP"
+		$AdditionalIncludeDirectories			"$BASE;..\public\steam"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty"
+		$AdditionalIncludeDirectories			"$BASE;..\common\steamui"
+		$AdditionalIncludeDirectories			"$BASE;..\external\dx9sdk\Effects11\Inc\"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\zlib"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\libvpx-v1.1.0"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango"				[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango\freetype"	[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango\glib"		[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\sdl\include"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\openssl-1.0.1e\steaminc"
+		
+
+	}
+}
+
+$Project "panorama_s1wrapper"
+{
+
+	$Folder	"Source Files"
+	{
+		$file "wrap_misc.cpp"
+		$file "wrap_render.cpp"
+		$file "wrap_rendercontext.cpp"
+		$file "wrap_resource.cpp"
+		$file "wrap_sdl.cpp"	[$WINDOWS]
+		$file "wrap_sound.cpp"
+		$file "wrap_texture.cpp"
+		$file "$SRCDIR/tier1/fileio.cpp"
+		$file "utlstringbuilder.cpp"
+		$file "$SRCDIR/thirdparty/JSON_parser/JSON_parser.c"
+		$File	"$SRCDIR\public\zip_utils.cpp"
+	}
+
+	$Folder	"Header Files"
+	{
+		$file "s1wrapper.h"
+		$file "splitstring.h"
+		$file "utlstringbuilder.h"
+		$file "wrap_other.h"
+		$file "appframework\iapplication.h"
+		$file "assetsystem\iassetsystem.h"
+		$file "engine2\igameresourceservice.h"
+		$file "materialsystem2\imaterialsystem2.h"
+		$file "materialsystem2\imaterialsystem2utils.h"
+		$file "rendersystem\indexdata.h"
+		$file "rendersystem\irendercontext.h"
+		$file "rendersystem\irenderdevice.h"
+		$file "rendersystem\irenderhardwareconfig.h"
+		$file "rendersystem\vertexcolor.h"
+		$file "rendersystem\vertexdata.h"
+		$file "resourcefile\introspectedtypemanager.h"
+		$file "resourcefile\resourcefile.h"
+		$file "resourcefile\resourcetype.h"
+		$file "resourcefile\schema.h"
+		$file "resourcesystem\iresourcesystem.h"
+		$file "resourcesystem\iresourcesystemprotected.h"
+		$file "resourcesystem\resourcehandletypes.h"
+		$file "resourcesystem\resourcemanifesthelpers.h"
+		$file "resourcesystem\stronghandle.h"
+		$file "resourcesystem\weakhandle.h"
+		$file "resourcesystem\resourcehandle.h"
+		$file "scenesystem\iscenelayer.h"
+		$file "scenesystem\iscenesystem.h"
+		$file "scenesystem\sceneobject.h"
+		$file "soundsystem\isoundopsystem.h"
+		$file "soundsystem\isoundsystem.h"
+		$file "tier0\memdbg_for_headers.h"
+		$file "tier1\base64.h"
+		$file "tier1\utltypesafeint.h"
+		$file "toolframework2\itoolframework2.h"
+		$file "wrap_texture.h"
+		$File	"$SRCDIR\public\zip_utils.h"
+		$File	"$SRCDIR\public\game\shared\csgo\econ_shared_defs.h"
+ 	}
+}

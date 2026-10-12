@@ -1,8 +1,54 @@
 <a name="english"></a>
 
-# Build 149 · October 9, 2026
+# Build 200 · October 12, 2026
 
 English | [简体中文](#chinese)
+
+The mobile source, unsigned IPA, matching data package and Ubuntu x86_64 dedicated-server sources are updated together. Version remains 0.7.2; app build is 200.
+
+- Restore firing recoil and view punch; bot takeover retains the bot's active weapon, ammunition and equipment. Kill icons use actual item definitions, including silenced variants.
+- Keep UI/font rendering independent of scene resolution; fix left-half movement capture and improve touch sliders. Add fixed-speed/velocity-accelerated aiming, rifle/sniper sensitivity, custom keyboard-mapped buttons and touch-control hiding.
+- Restore Xbox-standard controller mapping, isolate left/right sticks, ignore extra buttons, add independent deadzones, and retain controller crash fixes across incremental links.
+- Add the available 2019 sticker and glove catalogs. Stickers use original slots and can replace an occupied slot directly; sticker previews are intentionally omitted. Gloves use the knife-style selection list. Cosmetic attribute lookup, material warmup, attachment reuse, menu load and memory use are optimized.
+- Startup announcement appears only on the first successful data start, for ten seconds. Existing player preferences and inventory are retained.
+- Refine MetalFX motion confidence and previous-depth occlusion checks, reset history on large camera changes, and keep UI/viewmodel protection. Protected weapon animations remain at the native rate.
+- Add **Video → 插帧性能测试**: repeatable three-map quick or twelve-map full sweeps, 5v5 bots, turning/firing, three interpolation-detail candidates, per-device saved recommendations, explicit apply, cancellation and interruption recovery. Quality/resolution changes invalidate old recommendations.
+- Update Ubuntu server recoil, bot handoff, kill identity and validated sticker attribute replication while retaining protocol 2, detachable silencers, password checks and the four-map competitive rotation.
+
+**Validation:** Build 200's iPad installation, all 36 ARM64/iOS binary signatures, quick-mode 36 samples with real 5v5 counts, saved recommendation application, cancellation and forced-termination recovery passed. No GPU errors were recorded in the 36 samples. At the tested iPad high preset, detail 50% was the conservative choice; some samples remained below 120 FPS. The twelve-map full mode was not executed. Build 200 has not been installed on iPhone in this update. See [frame-calibration measurements](validation/frame-calibration-200.json).
+
+The resource/shader identity is unchanged from the existing paired data, so existing verified data remain compatible. The repackaged data are validated against the IPA manifest. The full IPA + Data cloud workflow has not been run; Build 149 cloud success does not certify Build 200. Ubuntu deployment/multiplayer runtime validation remains separate from source compilation.
+
+---
+
+<a name="chinese"></a>
+
+# Build 200 · 2026 年 10 月 12 日
+
+[English](#english) | 简体中文
+
+同步更新客户端源码、未签名 IPA、配套数据包与 Ubuntu x86_64 服务端源码。版本号保持0.7.2，构建号200。
+
+- 恢复枪械后坐力和视角抖动；接管 BOT 保留其当前武器、弹药和装备；击杀图标按真实武器定义显示，覆盖消音型号。
+- 字体／UI 与场景分辨率独立；修复左半屏移动中断，优化触屏滑条；增加固定速度／速度加速、步枪镜／狙击镜灵敏度、自定义键盘映射按钮和隐藏触控功能。
+- 恢复 Xbox 标准手柄布局，隔离左右摇杆、忽略额外按钮、提供独立死区，并确保后续增量链接保留手柄崩溃修复。
+- 导入现有2019资源的贴纸与手套目录；贴纸遵循原版槽位，可直接替换已装备位置，不提供贴纸预览；手套使用刀具式列表。优化外观属性查找、材质预热、附着实体复用、大厅负载和内存。
+- 公告只在首次成功导入数据后显示10秒；保留已有玩家设置与库存。
+- 加强 MetalFX 运动置信度、前一帧深度遮挡检查及大幅转向历史重置，保留 UI／持枪模型保护；受保护武器动画仍按真实帧率运行。
+- 新增 **设置 → 视频设置 → 插帧性能测试**：三图快速／十二图完整测试，固定机位反复转向、开枪和5v5机器人场景，比较三档插帧细节，按设备保存推荐结果；手动应用，支持取消和异常中断恢复。画质／分辨率改变后须重测。
+- Ubuntu 服务端同步后坐力、BOT接管、击杀标识和贴纸属性复制，保留协议2、消音器、密码校验及四图经典竞技轮换。
+
+**验证范围：** Build200 已安装到 iPad，36个 ARM64/iOS 二进制签名检查通过；三图36组采样均为真实5v5，无 GPU 错误，推荐应用、取消和强制退出恢复通过。本机高画质保守推荐插帧细节50%，部分场景仍低于120帧；未执行十二图完整测试，本轮也未安装到 iPhone。详见[插帧验收记录](validation/frame-calibration-200.json)。
+
+资源／着色器身份未改变，现有已验证数据仍兼容；重打包数据与 IPA 清单匹配。完整 IPA + Data 云流程仍未运行，Build149 云编译成功不能作为 Build200 的证明。Ubuntu 部署与多人联机运行验收独立于源码编译。
+
+---
+
+<a name="build149-english"></a>
+
+# Build 149 · October 9, 2026
+
+English | [简体中文](#build149-chinese)
 
 This update brings the iPhone / iPad source snapshot from Build 86 to **0.7.2 (Build 149)**. Local and GitHub Actions builds use the updated native build graph: **3,848 tasks and 35 frameworks**.
 
@@ -24,11 +70,11 @@ Build instructions: [Mac](BUILD.en.md) · [Windows / GitHub Actions](CLOUD_BUILD
 
 ---
 
-<a name="chinese"></a>
+<a name="build149-chinese"></a>
 
 # Build 149 · 2026 年 10 月 9 日
 
-[English](#english) | 简体中文
+[English](#build149-english) | 简体中文
 
 本次将 iPhone / iPad 源码从 Build 86 同步至 **0.7.2（Build 149）**。本机及 GitHub Actions 使用更新后的原生构建清单：**3,848 项任务、35 个框架**。
 

@@ -1,0 +1,378 @@
+
+// DYNAMIC: "D_TEXTURETYPE" "0..4"
+// DYNAMIC: "D_PREMULTIPLY_ALPHA" "0..1"
+// DYNAMIC: "D_USERADIALGRADIENT" "0..1"
+// DYNAMIC: "D_GRADIENT_TWOSTOP" "0..1"
+// DYNAMIC: "D_GRADIENT_COMPLEX" "0..1"
+// DYNAMIC: "D_USEOUTERCORNER" "0..1"
+// DYNAMIC: "D_USEINNERCORNER" "0..1"
+// DYNAMIC: "D_COLORCORRECTION" "0..1"
+// DYNAMIC: "D_USEOPACITYMASK" "0..1"
+// DYNAMIC: "D_USERADIALCLIP" "0..1"
+
+// SKIP: ( $D_USEOUTERCORNER == 1 ) && ( $D_USEINNERCORNER == 1 )
+
+// consider SKIPS for these
+//DynamicComboRule( Requires1( D_PREMULTIPLY_ALPHA, D_TEXTURETYPE == 1, D_TEXTURETYPE == 4 ) );
+//DynamicComboRule( Allow1( D_GRADIENT_TWOSTOP, D_GRADIENT_COMPLEX ) );
+
+#define TEXTURETYPE_NONE	0
+#define TEXTURETYPE_RGBA	1
+#define TEXTURETYPE_ALPHA	2
+#define TEXTURETYPE_YUV		3
+#define TEXTURETYPE_YCOCG	4
+
+#define M_PI 3.14159265358979323846
+
+#include "common_ps_fxc.h"
+
+float4 g_vTopCornerRad : register(c0);
+float4 g_vBtmCornerRad : register(c1);
+float4 g_vBorderWd : register(c2);
+float4 g_vBordercolor : register(c3);
+
+float4 g_vGradientradialoffset_OpacityMaskOpacity : register(c4);  // .xy contains gradientRadialOffset, z contains OpacityMaskOpacity
+#define g_flOpacityMaskOpacity g_vGradientradialoffset_OpacityMaskOpacity.z
+
+float4 g_H_S_B_C : register(c5); // HueShift, Saturation, Brightness, Contrast
+#define g_flHueShift g_H_S_B_C.x
+#define g_flSaturation g_H_S_B_C.y
+#define g_flBrightness g_H_S_B_C.z
+#define g_flContrast g_H_S_B_C.w
+
+#if ( D_USERADIALCLIP )
+    float4 g_vRadialClipCenterXYStartSector : register (c6);
+    #define g_vRadialClipCenter (g_vRadialClipCenterXYStartSector.xy)
+    #define g_flRadialClipStartAngle (g_vRadialClipCenterXYStartSector.z)
+    #define g_flRadialClipSectorAngle (g_vRadialClipCenterXYStartSector.w)
+#endif
+
+// Texture Samplers ---------------------------------------------------------------------------------------------------------------------------------------
+#if ( D_TEXTURETYPE == TEXTURETYPE_YUV )
+	sampler g_tTexture0 : register( s0 );
+	sampler g_tTexture1 : register( s1 );
+	sampler g_tTexture2 : register( s2 );
+#else
+#if ( D_TEXTURETYPE == TEXTURETYPE_YCOCG )
+		sampler g_tTexture0 : register( s0 );
+#else
+sampler g_tTexture0 : register(s0);
+#endif
+sampler g_tTexture1 : register(s1);
+sampler g_tTexture2 : register(s2);
+#endif
+
+sampler g_tTexture3 : register(s3);
+
+
+#define Tex2D tex2D
+
+struct PS_INPUT
+{
+	float4 vTexcoordgradientcoord : TEXCOORD0;
+	float4 vColor0 : TEXCOORD1;
+	float4 vColor1 : TEXCOORD2;
+	float4 vOpacitytexcoord : TEXCOORD3;
+    float4 vfragCoord_WdHt : TEXCOORD4;
+};
+
+struct PS_OUTPUT
+{
+	float4 vColor;
+};
+
+
+float fsel(float flComparand, float flValGE, float flLT)
+{
+	return (flComparand >= 0.0) ? flValGE : flLT;
+}
+
+//-----------------------------------------------------------------------------
+// Convert RGB to HSV
+//-----------------------------------------------------------------------------
+float3 RgbToHsv(float3 vRGB)
+{
+	float3 vHSV = float3(0.0, 0.0, 0.0);
+
+	float minVal = min(vRGB.r, min(vRGB.g, vRGB.b));
+	float maxVal = max(vRGB.r, max(vRGB.g, vRGB.b));
+	float delta = maxVal - minVal; // Delta vRGB value
+	vHSV.z = maxVal;
+
+	if (abs(delta) != 0.0) // If gray, leave H & S at zero
+	{
+		vHSV.y = delta / maxVal;
+		float3 delRGB;
+		delRGB = (((maxVal.xxx - vRGB) / 6.0) + (delta / 2.0)) / delta;
+		if (vRGB.x == maxVal)
+		{
+			vHSV.x = delRGB.z - delRGB.y;
+		}
+		else if (vRGB.y == maxVal)
+		{
+			vHSV.x = (1.0 / 3.0) + delRGB.x - delRGB.z;
+		}
+		else if (vRGB.z == maxVal)
+		{
+			vHSV.x = (2.0 / 3.0) + delRGB.y - delRGB.x;
+		}
+
+		vHSV.x = frac(vHSV.x);
+	}
+
+	return (vHSV);
+}
+
+float3 HsvToRgb(float3 vHSV)
+{
+	float3 vRGB = vHSV.zzz;
+	if (vHSV.y != 0)
+	{
+		float var_h = vHSV.x * 6;
+		float var_i = floor(var_h); // Or ... var_i = floor( var_h )
+		float var_1 = vHSV.z * (1.0 - vHSV.y);
+		float var_2 = vHSV.z * (1.0 - vHSV.y * (var_h - var_i));
+		float var_3 = vHSV.z * (1.0 - vHSV.y * (1 - (var_h - var_i)));
+
+		if (var_i == 0)
+		{
+			vRGB = float3(vHSV.z, var_3, var_1);
+		}
+		else if (var_i == 1)
+		{
+			vRGB = float3(var_2, vHSV.z, var_1);
+		}
+		else if (var_i == 2)
+		{
+			vRGB = float3(var_1, vHSV.z, var_3);
+		}
+		else if (var_i == 3)
+		{
+			vRGB = float3(var_1, var_2, vHSV.z);
+		}
+		else if (var_i == 4)
+		{
+			vRGB = float3(var_3, var_1, vHSV.z);
+		}
+		else
+		{
+			vRGB = float3(vHSV.z, var_1, var_2);
+		}
+	}
+	return (vRGB);
+}
+
+
+float4 SampleTextureRGB(float2 vecSamplePos)
+{
+	float4 vTexCol = float4(1.0, 1.0, 1.0, 1.0);
+
+	#if ( D_TEXTURETYPE == TEXTURETYPE_RGBA )
+	{
+		vTexCol = Tex2D( g_tTexture0, vecSamplePos );
+	}
+	#elif ( D_TEXTURETYPE == TEXTURETYPE_ALPHA )
+	{
+		vTexCol = Tex2D( g_tTexture0, vecSamplePos );
+		vTexCol.r = vTexCol.a;
+		vTexCol.g = vTexCol.a;
+		vTexCol.b = vTexCol.a;
+	}
+	#elif ( D_TEXTURETYPE == TEXTURETYPE_YUV )
+	{
+		// direct decoding of YV12 or I420 video
+		float y = Tex2D( g_tTexture0, vecSamplePos ).r;
+		float u = Tex2D( g_tTexture1, vecSamplePos ).r;
+		float v = Tex2D( g_tTexture2, vecSamplePos ).r;
+
+		y = 1.1643 * ( y - 0.0625 );
+		u = u - 0.5;
+		v = v - 0.5;
+
+		vTexCol = float4( y + 1.5958 * v, y - 0.39173 * u - 0.81290 * v, y + 2.017 * u, 1.0 );
+		vTexCol.r = pow( vTexCol.r, 2.2 );
+		vTexCol.g = pow( vTexCol.g, 2.2 );
+		vTexCol.b = pow( vTexCol.b, 2.2 );
+	}
+	#elif ( D_TEXTURETYPE == TEXTURETYPE_YCOCG )
+	{
+		float4 vYCoCg = Tex2D( g_tTexture0, vecSamplePos );
+		float flCoCgScale = ( vYCoCg.b * ( 255.0 / 8.0 ) ) + 1.0;
+		float flCo = ( vYCoCg.r - ( 0.5 * 256.0 / 255.0 ) ) / flCoCgScale;
+		float flCg = ( vYCoCg.g - ( 0.5 * 256.0 / 255.0 ) ) / flCoCgScale;
+		float flY = vYCoCg.a;
+		vTexCol = float4( flY + flCo - flCg, flY + flCg, flY - flCo - flCg, 1.0 );
+		vTexCol.rgb = SrgbGammaToLinear( vTexCol.rgb );	// Need this over a pow(2.2) to match uncompressed hardware srgb-decoded as closely as possible
+	}
+	#endif
+
+	return vTexCol;
+}
+
+float4_color_return_type main(PS_INPUT i) : COLOR
+{
+	PS_OUTPUT o;
+
+	float4 vTexCol = SampleTextureRGB(i.vTexcoordgradientcoord.xy);
+
+	#if ( D_COLORCORRECTION != 0 )
+	{
+		float3 vHSV = RgbToHsv(vTexCol.rgb);
+		vHSV.r = frac(vHSV.r + g_flHueShift);
+		vHSV.g *= g_flSaturation;
+		vHSV.b *= g_flBrightness;
+		if ((vTexCol.a > 0.0) || (g_flContrast > 1))
+			vHSV.b = lerp(0.5, vHSV.b, g_flContrast);
+		vTexCol.rgb = HsvToRgb(vHSV);
+	}
+	#endif
+
+	#if ( D_PREMULTIPLY_ALPHA != 0 )
+	{
+		// Premultiply alpha AFTER the color correction step
+		vTexCol.rgb *= vTexCol.a;
+	}
+	#endif
+
+	float gradientposition;
+
+	#if ( D_USERADIALGRADIENT != 0 )
+	{
+		float cdx = g_vGradientradialoffset_OpacityMaskOpacity.x;
+		float cdy = g_vGradientradialoffset_OpacityMaskOpacity.y;
+		float dr = 1.0 - 0.0;
+		float A = cdx * cdx + cdy * cdy - dr * dr;
+		float r1 = 0.0;
+		float pdx = i.vTexcoordgradientcoord.z;
+		float pdy = i.vTexcoordgradientcoord.w;
+		float B = -2 * (pdx * cdx + pdy * cdy + r1 * dr);
+		float C = pdx * pdx + pdy * pdy - r1 * r1;
+		float det = max(B * B - 4 * A * C, 0.0f);
+		gradientposition = (-B + sign(dr * A) * sqrt(det)) / (2 * A);
+		// apply scale/bias to the floating part and reassemble
+		//	float texFrac = frac(gradientposition) * texScale + texBias;
+		//	gradientposition = floor(gradientposition) + texFrac;
+	}
+	#else
+	{
+		gradientposition = i.vTexcoordgradientcoord.z;
+	}
+	#endif
+
+	#if ( D_GRADIENT_COMPLEX != 0 )
+	{
+		// Apply a scale and bias based on the current texture width to fall on pixel centers
+		// Make sure to update this if we change the gradient resolution
+		const float gradientTextureWidth = 1024.0;
+		const float gradientScale = (gradientTextureWidth - 1.0) / gradientTextureWidth;
+		const float gradientBias = 0.5 / gradientTextureWidth;
+		float gradientCoord = clamp(gradientposition, 0.0, 1.0) * gradientScale + gradientBias;
+		vTexCol *= Tex2D(g_tTexture3, float2(gradientCoord, 0));
+	}
+	#elif ( D_GRADIENT_TWOSTOP == 1 )
+	{
+		vTexCol *= lerp( i.vColor0, i.vColor1, clamp( gradientposition, 0.0, 1.0 ) );
+	}
+	#else
+	{
+		vTexCol *= i.vColor0;
+	}
+	#endif
+
+	// Rounded corners. See Source2Surface.cpp (top) for comments
+
+	#if ( ( D_USEOUTERCORNER != 0 ) || ( D_USEINNERCORNER != 0 ) )
+	{
+		float4 uv = i.vfragCoord_WdHt.xyxy;
+
+        float4 scaletop = float4(min(g_vTopCornerRad.x, g_vTopCornerRad.y) / g_vTopCornerRad.x,
+							  min(g_vTopCornerRad.x, g_vTopCornerRad.y) / g_vTopCornerRad.y,
+							  min(g_vTopCornerRad.z, g_vTopCornerRad.w) / g_vTopCornerRad.z,
+							  min(g_vTopCornerRad.z, g_vTopCornerRad.w) / g_vTopCornerRad.w);
+
+        float4 scalebtm = float4(min(g_vBtmCornerRad.x, g_vBtmCornerRad.y) / g_vBtmCornerRad.x,
+							  min(g_vBtmCornerRad.x, g_vBtmCornerRad.y) / g_vBtmCornerRad.y,
+							  min(g_vBtmCornerRad.z, g_vBtmCornerRad.w) / g_vBtmCornerRad.z,
+							  min(g_vBtmCornerRad.z, g_vBtmCornerRad.w) / g_vBtmCornerRad.w);
+
+
+		float4 centertop = g_vTopCornerRad + g_vBorderWd.wxyx; //bordertop;
+		float4 centerbtm = g_vBtmCornerRad + g_vBorderWd.yzwz; //borderbtm;
+
+		centertop *= scaletop;
+		centerbtm *= scalebtm;
+
+		// This uv (fragcoord) tranforms all corners as though they were top left
+		float4 uvtop = float4(uv.x, uv.y, i.vfragCoord_WdHt.z - uv.z, uv.w);
+		float4 uvbtm = float4(i.vfragCoord_WdHt.z - uv.z, i.vfragCoord_WdHt.w - uv.w, uv.x, i.vfragCoord_WdHt.w - uv.y);
+
+		// Scales achieve ellipses
+		uvtop *= scaletop;
+		uvbtm *= scalebtm;
+
+		// Clamp to coords once we are outside the +ve quadrant of the circle elipse
+		uvtop = min(uvtop, centertop);
+		uvbtm = min(uvbtm, centerbtm);
+
+		// 
+		float4 d;
+		d.x = length(centertop.xy - uvtop.xy) - min(g_vTopCornerRad.x, g_vTopCornerRad.y);
+		d.y = length(centertop.zw - uvtop.zw) - min(g_vTopCornerRad.z, g_vTopCornerRad.w);
+		d.z = length(centerbtm.xy - uvbtm.xy) - min(g_vBtmCornerRad.x, g_vBtmCornerRad.y);
+		d.w = length(centerbtm.zw - uvbtm.zw) - min(g_vBtmCornerRad.z, g_vBtmCornerRad.w);
+
+		float4 t = float4(1.0, 1.0, 1.0, 1.0) - clamp(d, 0.0, 1.0);
+
+        #if (D_USEINNERCORNER != 0)
+        {
+            vTexCol = lerp(g_vBordercolor, vTexCol, t.x * t.y * t.z * t.w);
+        }
+        #else
+        {
+		    vTexCol = vTexCol *  t.x * t.y * t.z * t.w;
+        }
+        #endif
+
+	}
+	#endif
+
+	#if ( D_USEOPACITYMASK != 0 )
+	{
+		vTexCol = vTexCol * (1.0 - g_flOpacityMaskOpacity) + vTexCol * Tex2D(g_tTexture1, i.vOpacitytexcoord.xy).a * g_flOpacityMaskOpacity;
+	}
+	#endif
+
+    #if ( D_USERADIALCLIP != 0 )
+    {
+        // Radial clipping
+        float2 uv = i.vfragCoord_WdHt.xy - (i.vfragCoord_WdHt.zw * 0.5);
+        float startAng = g_flRadialClipStartAngle;
+        float ang1 = g_flRadialClipSectorAngle;
+        float angFrag = atan2(-uv.x, uv.y) + M_PI - startAng;
+        angFrag = (angFrag < 0) ? angFrag + (2*M_PI) : angFrag;
+        float a = step(ang1,angFrag);
+
+        // AA
+        float angdiff = angFrag - ang1;
+        float2x2 mat = float2x2(cos(angdiff), sin(angdiff), -sin(angdiff), cos(angdiff));
+        float2 uv2 = mul(uv, mat);
+        float f = length(uv2 - uv);
+        a *= lerp( 0.0, 1.0, saturate(f) );
+
+        // old behavior -- don't antialias vertical startAng.  save some PS in this case by skipping the AA calculation in that case.
+        if(startAng != 0)
+        {
+            angdiff = angFrag;
+            mat = float2x2(cos(angdiff), sin(angdiff), -sin(angdiff), cos(angdiff));
+            uv2 = mul(uv, mat);
+            f = length(uv2 - uv);
+            a *= lerp( 0.0, 1.0, saturate(f) );
+        }
+
+        vTexCol *= a;
+    }
+    #endif
+
+    o.vColor = vTexCol.rgba;
+	return FinalOutput(o.vColor, 0, PIXEL_FOG_TYPE_NONE, TONEMAP_SCALE_NONE);
+}

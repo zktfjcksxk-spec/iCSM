@@ -1,0 +1,70 @@
+//====== Copyright 1996-2013, Valve Corporation, All rights reserved. =======
+//
+// Purpose: The file defines Google Protocol Buffers for the uifontfile
+// on-disk format.
+//
+//=============================================================================
+
+// We care more about speed than code size
+option optimize_for = SPEED;
+
+// We don't use the service generation functionality
+option cc_generic_services = false;
+
+// 
+// STYLE NOTES:
+//
+// Use CamelCase CMsgMyMessageName style names for messages.
+// 
+// Use lowercase _ delimited names like my_steam_id for field names, this is non-standard for Steam,
+// but plays nice with the Google formatted code generation.  
+// 
+// Try not to use required fields ever. Only do so if you are really really sure you'll never want them removed. 
+// Optional should be preffered as it will make versioning easier and cleaner in the future if someone refactors
+// your message and wants to remove or rename fields.  This is especially important for messages sent from the server
+// to clients.  We may be able to safely remove a field if it's optional even if an old client expects it, but if it 
+// was required we can't remove it.  Using required doesn't really offer any advantages at all as you'll just end up
+// with an empty message with all default values if you receive a message missing a required field, so there is no
+// real advantage to using it ever.
+//
+// Use fixed64 for JobId_t, GID_t, or SteamID or GameID.  This is appropriate for any field that is normally
+// going to be larger than 2^56.  Otherwise use int64 for 64 bit values that are frequently smaller
+// than 2^56 as it will safe space on the wire in those cases.
+//
+// Similar to fixed64, use fixed32 for RTime32 or other 32 bit values that are frequently larger than
+// 2^28.  It will safe space in those cases, otherwise use int32 which will safe space for smaller values.
+// An exception to this rule for RTime32 is if the value will frequently be zero rather than set to an actual 
+// time.
+//
+// Use uint32 with [default = 2] for EResult values in messages.  The default is important since the normal int/uint
+// default of 0 is not a valid EResult value. 2 is k_EResultFail.
+//
+// See: http://code.google.com/apis/protocolbuffers/docs/proto.html for a complete language guide.
+//
+
+
+//
+// Font file/package representation 
+//
+message CUIFontFilePB
+{
+	optional string font_file_name = 1;
+	optional bytes opentype_font_data = 2;
+}
+
+
+// 
+// Font file/package representation 
+//
+message CUIFontFilePackagePB
+{
+	// We'll always require a version
+	required uint32 package_version = 1;
+
+	message CUIEncryptedFontFilePB
+	{
+		optional bytes encrypted_contents = 1;
+	}
+
+	repeated CUIEncryptedFontFilePB encrypted_font_files = 2;
+}

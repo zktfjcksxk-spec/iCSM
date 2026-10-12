@@ -1,0 +1,9 @@
+obj/
+
+*.o
+*.a
+*.obj
+*.lib
+*.vpc.sentinel
+*.vcxproj*
+*.vcproj*

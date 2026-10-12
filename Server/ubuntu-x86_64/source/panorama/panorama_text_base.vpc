@@ -1,0 +1,270 @@
+//-----------------------------------------------------------------------------
+//	panorama_text_base.vpc
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR				".."
+$Macro OUTBINDIR			"$SRCDIR\..\game\bin"
+
+$Macro OUTBINNAME			"panorama_text_pango"				[$PANORAMA_TEXT_PANGO]
+$Macro INTERMEDIATESUBDIR	"_text_pango"						[$PANORAMA_TEXT_PANGO]
+
+$Macro GENERATED_PROTO_DIR	"generated_proto_panorama_text_base"
+
+$Conditional "SPLIT_PANORAMA_TEXT" "1"
+
+$Macro PANORAMA_USE_S1WRAPPER "1"
+
+$Include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+$Include "$SRCDIR\vpc_scripts\protobuf_builder.vpc"
+
+
+$Configuration	"Debug"
+{
+	$General
+	{
+		$OutputDirectory		"Debug_text_pango"
+		$IntermediateDirectory	"Debug_text_pango"
+	}
+}
+
+$Configuration	"Release"
+{
+	$General
+	{		
+		$OutputDirectory		"Release_text_pango"
+		$IntermediateDirectory	"Release_text_pango"
+	}
+}
+
+
+$Configuration
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$AdditionalProjectDependencies			"$BASE;mathlib"	[$WINDOWS]
+	}
+
+	$Compiler
+	{
+		$PreprocessorDefinitions				"$BASE;_CLIENT;PANORAMA_EXPORTS;STEAM_API_NODLL;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA"
+		$PreprocessorDefinitions				"$BASE;PANORAMA_USE_S1WRAPPER"
+
+
+		$AdditionalIncludeDirectories			"steamextra\common;steamextra\public;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper\thirdparty\pango;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper;$BASE"
+//		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;$SRCDIR\panorama"
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+		$AdditionalIncludeDirectories			"$BASE;..\public\panorama"
+		$AdditionalIncludeDirectories			"$BASE;..\public"
+		$AdditionalIncludeDirectories			"$BASE;..\public\tier1"
+		$AdditionalIncludeDirectories			"$BASE;..\public\vstdlib"
+		$AdditionalIncludeDirectories			"$BASE;..\panorama_s1wrapper\thirdparty\pango\freetype" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;..\external\$CRYPTOPP"
+		$AdditionalIncludeDirectories			"$BASE;..\public\steam"
+		$AdditionalIncludeDirectories			"$BASE;..\common\steamui"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\zlib"
+		$AdditionalIncludeDirectories			"$BASE;..\panorama_s1wrapper\thirdparty\pango\glib" [$PANORAMA_TEXT_PANGO]
+		$AdditionalIncludeDirectories			"$BASE;..\external\openssl-1.0.1e\steaminc"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\sdl\include"
+
+		
+//		$Create/UsePrecompiledHeader			"Use Precompiled Header (/Yu)"
+//		$Create/UsePCHThroughFile				"stdafx.h" 
+		
+		$EnableC++Exceptions					"No"
+
+		// necessary to force including debug information from stdafx.obj
+//		$AdditionalOptions						"$BASE /YlCUIEngine"
+
+		$AdditionalOptions						"$BASE /FS"
+
+		$DisableSpecificWarnings	"$BASE;4189"   [$WIN32]
+	}
+
+	$Linker
+	{
+		// SystemConfiguration must come before IOKit due to a bug in the Apple SDK that lets the linker bind to
+		// symbols that were in SystemConfiguration pre 10.7, are in IOKit in 10.7. if the linker chooses the IOKit version, 
+		// the resulting binary will fail to load on 10.5 
+		$SystemFrameworks				"$BASE;Cocoa;SystemConfiguration;IOKit;Security;Carbon" [$OSXALL]
+		$SystemLibraries                "z;iconv" [$OSXALL]
+	}
+}
+
+$Project
+{
+	$Folder "Protobuf Files"
+	{
+		$File "steamextra\common\uifontfile_format.proto"
+
+		$Folder "Generated Files"
+		{
+			$DynamicFile "$GENERATED_PROTO_DIR\uifontfile_format.pb.cc" 
+			{
+				$Configuration
+				{
+					$Compiler 
+					{
+						$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+					}
+				}
+			}
+		}
+
+	}
+
+	$Folder "Public"
+	{
+		$File "$SRCDIR\public\panorama\panorama.h"
+		$File "$SRCDIR\public\panorama\panoramasymbol.h"
+		$File "$SRCDIR\public\panorama\panoramatypes.h"
+		$File "$SRCDIR\public\panorama\panoramacxx.h"
+
+		$Folder "Text"
+		{
+			$File "$SRCDIR\public\panorama\text\iuitextlayout.h"
+			$File "$SRCDIR\public\panorama\text\iuitextservices.h"
+		}
+	}
+
+	$Folder	"Source Files"
+	{
+		$file "$SRCDIR\tier1\fileio.cpp"
+		{
+			$Configuration
+			{
+				$Compiler 
+				{
+					$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+				}
+			}
+		}
+		$file "$SRCDIR\panorama_s1wrapper\wrap_text_pango.cpp"
+		{
+			$Configuration
+			{
+				$Compiler 
+				{
+					$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+				}
+			}
+		}
+		$file "$SRCDIR\panorama_s1wrapper\wrap_misc.cpp"
+		{
+			$Configuration
+			{
+				$Compiler 
+				{
+					$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+				}
+			}
+		}
+		$File "$SRCDIR\common\language.cpp"
+		{
+			$Configuration
+			{
+				$Compiler
+				{
+					$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+				}
+			}
+		}
+
+	}
+
+
+
+	$Folder "Text Services"
+	{
+		$File "steamextra\common\uifontfile.h"
+		$File "steamextra\common\uifontfile.cpp"
+		$File ".\text\uifontfileloaderlinux.h"
+		$File ".\text\uifontfileloaderlinux.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+		$File ".\text\uifontfileloaderwin32.h" [$WINDOWS]
+		$File ".\text\uifontfileloaderosx.h" [$OSXALL]
+		$File ".\text\uitextlayoutwin32.h"
+		$File ".\text\uifontfileloaderwin32.cpp" [$WINDOWS] \
+			".\text\uifontfileloaderosx.cpp" [$OSXALL] \
+			".\text\uitextlayoutwin32.cpp" [$WINDOWS]
+		{
+			$Configuration 
+			{ 
+				// kept here to allow msdev to search in it
+				$ExcludedFromBuild "Yes" 
+			} 
+		}
+
+		$File ".\text\texttexturecache.h"
+		$File ".\text\texttexturecache.cpp"
+		$File ".\text\textlayoutdrawcache.h"
+		$File ".\text\textlayoutdrawcache.cpp"
+
+		$File ".\text\uitextlayoutpango.h"		[$PANORAMA_TEXT_PANGO]
+		$File ".\text\uitextlayoutpango.cpp"	[$PANORAMA_TEXT_PANGO]
+		$File ".\text\uitextservicespango.h"	[$PANORAMA_TEXT_PANGO]
+		$File ".\text\uitextservicespango.cpp"	[$PANORAMA_TEXT_PANGO]
+
+		$File ".\text\source2\panorama_text_interface.cpp"
+	}
+
+
+	$File ".\stdafx.h"
+
+	$Folder "Link Libraries" 
+	{
+		$Lib "tier2"
+		$Lib "tier3"
+
+		$File "$LIBPUBLIC\libprotobuf.a"			[$POSIX]
+		
+		$File "..\lib\$PLATFORM\release\libeay32.lib"		[$WINDOWS]
+		$Lib "$SRCDIR\lib\common\$PLATFORM\libcrypto"	[$POSIX]
+
+		$LibExternal	libprotobuf [!$VS2013 && !$VS2015]
+		$Libexternal	$LIBPUBLIC\2013\libprotobuf [$VS2013]
+		$Libexternal	$LIBPUBLIC\2015\libprotobuf [$VS2015]
+		{
+			$Configuration "Debug" { $ExcludedFromBuild "Yes" }
+		}
+
+		$Libexternal	$LIBPUBLIC\2015\debug\libprotobuf [$VS2015]
+		{
+			$Configuration "Release" { $ExcludedFromBuild "Yes" }
+		}
+
+		$Lib	"$LIBPUBLIC\mathlib"
+
+		$File "$SRCDIR\lib\public\$PLATFORM\libsdl2.dylib"	[$OSXALL]
+		$File "$SRCDIR\lib\public\$PLATFORM\libSDL2.so"		[$LINUXALL]
+		//$File "$SRCDIR\lib\public\$PLATFORM\sdl2.lib"		[$WINDOWS]
+
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\pango-1.0.lib"		[$WINDOWS && $PANORAMA_TEXT_PANGO]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\pangoft2-1.0.lib"	[$WINDOWS && $PANORAMA_TEXT_PANGO]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\fontconfig.lib"		[$WINDOWS && $PANORAMA_TEXT_PANGO]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\gobject-2.0.lib"		[$WINDOWS && $PANORAMA_TEXT_PANGO]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\glib-2.0.lib"		[$WINDOWS && $PANORAMA_TEXT_PANGO]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\libfreetype-6.lib"	[$WINDOWS && $PANORAMA_TEXT_PANGO]
+
+		$ImpLib "$LIBCOMMON\pango-1.0"		[$OSXALL && $PANORAMA_TEXT_PANGO]
+		$ImpLib "$LIBCOMMON\pangoft2-1.0"	[$OSXALL && $PANORAMA_TEXT_PANGO]
+		$ImpLib "$LIBCOMMON\fontconfig"		[$OSXALL && $PANORAMA_TEXT_PANGO]
+		$ImpLib "$LIBCOMMON\gobject-2.0"	[$OSXALL && $PANORAMA_TEXT_PANGO]
+		$ImpLib "$LIBCOMMON\glib-2.0"       [$OSXALL && $PANORAMA_TEXT_PANGO]
+		$ImpLib "$LIBCOMMON\freetype"		[$OSXALL && $PANORAMA_TEXT_PANGO]
+	}
+}

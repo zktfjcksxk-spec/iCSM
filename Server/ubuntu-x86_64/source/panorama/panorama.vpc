@@ -1,0 +1,585 @@
+//-----------------------------------------------------------------------------
+//	PANORAMA.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR				".."
+$Macro OUTBINDIR			"$SRCDIR\..\game\bin"
+
+$Macro MILESBASEDIR			"$SRCDIR\thirdparty\miles-9"
+
+$Macro GENERATED_PROTO_DIR	"generated_proto_panorama"
+
+$Include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+$Include "$SRCDIR\vpc_scripts\protobuf_builder.vpc"
+
+$include "$SRCDIR\external\external.vpc"
+$include "$SRCDIR\external\$EXTERNALCRYPTOPP\external_cryptopp.vpc"
+
+$Conditional "SPLIT_PANORAMA_TEXT" "1"
+
+// V8_LINK_DEBUGGING_LIBS - note this only controls linking libs, debugging is turned
+// on/off by V8_DEBUGGING_ENABLED in ctx_debug.h, so it can be turned off easily for perf analysis
+$Conditional "V8_LINK_DEBUGGING_LIBS" "1"		[$WINDOWS && $DEVELOPMENT_ONLY]
+
+$Macro PANORAMA_USE_S1WRAPPER "1"
+
+$Configuration
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$AdditionalProjectDependencies			"$BASE;chromemessages;mathlib;steammessages;libaudio;libvideo;steamclient_client" [$WINDOWS]
+	}
+
+	$Compiler
+	{
+		$ShowIncludes							"Yes (/showIncludes)" [$0]
+
+		$PreprocessorDefinitions				"$BASE;_CLIENT;PANORAMA_EXPORTS;STEAM_API_NODLL;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA"
+		$PreprocessorDefinitions				"$BASE;PANORAMA_USE_S1WRAPPER"
+		$PreprocessorDefinitions				"$BASE;ALLOW_TEXT_MODE=1" [$CSTRIKE_TRUNK_BUILD||$CSTRIKE_STAGING_BUILD]
+		$PreprocessorDefinitions				"$BASE;NOAUDIO" [$NOAUDIO]
+		$PreprocessorDefinitions				"$BASE;UBUNTU" [$UBUNTU]
+
+		$AdditionalIncludeDirectories			"steamextra\common;steamextra\public;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper\thirdparty;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper;$BASE"
+		$AdditionalIncludeDirectories			"$BASE;$SRCDIR\panorama"
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+		$AdditionalIncludeDirectories			"$BASE;..\public\panorama"
+		$AdditionalIncludeDirectories			"$BASE;..\public"
+		$AdditionalIncludeDirectories			"$BASE;..\public\tier1"
+		$AdditionalIncludeDirectories			"$BASE;..\public\vstdlib"
+		$AdditionalIncludeDirectories			"$BASE;..\common"
+		$AdditionalIncludeDirectories			"$BASE;..\public\steam"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty"
+		$AdditionalIncludeDirectories			"$BASE;..\common\steamui"
+		$AdditionalIncludeDirectories			"$BASE;..\external\dx9sdk\Effects11\Inc\"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\zlib"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\libvpx-v1.1.0"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango"				[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango\freetype"	[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\pango\glib"		[!$SPLIT_PANORAMA_TEXT]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\sdl\include"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\websocketpp"		[$V8_LINK_DEBUGGING_LIBS]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\asio\include"		[$V8_LINK_DEBUGGING_LIBS]
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\cairo\include"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\libparsifal-0.8.3\include"
+				
+		$Create/UsePrecompiledHeader			"Use Precompiled Header (/Yu)"
+		$Create/UsePCHThroughFile				"stdafx.h" 
+		
+		$EnableC++Exceptions					"No"
+
+		// necessary to force including debug information from stdafx.obj
+		$AdditionalOptions						"$BASE /YlCUIEngine"
+
+		$AdditionalOptions						"$BASE /FS"
+
+		$DisableSpecificWarnings	"$BASE;4189"   [$WIN32]
+
+	}
+
+	$Linker
+	{
+		$AdditionalDependencies			"$BASE WS2_32.LIB shlwapi.lib odbc32.lib wsock32.lib winmm.lib setupapi.lib psapi.lib" [$WINDOWS]
+		//$AdditionalDependencies			"$BASE iphlpapi.lib" [$WIN32]
+		//$AdditionalDependencies			"$BASE ..\thirdparty\nvidia\nvapi\lib$PLATSUBDIR\nvapi.lib" [$WINDOWS && $PANORAMA_USE_S1WRAPPER]
+		$AdditionalDependencies			"$BASE opengl32.lib" [$WINDOWS && $OGL]
+
+		// SystemConfiguration must come before IOKit due to a bug in the Apple SDK that lets the linker bind to
+		// symbols that were in SystemConfiguration pre 10.7, are in IOKit in 10.7. if the linker chooses the IOKit version, 
+		// the resulting binary will fail to load on 10.5 
+		$SystemFrameworks				"$BASE;Cocoa;SystemConfiguration;OpenGL;IOKit;DiskArbitration;Security;Carbon;AGL"
+			$SystemLibraries                "z;iconv;" [$OSXALL]
+                $SystemLibraries				"SDL2;Xtst;Xfixes;Xrandr;Xext;X11;GL" [$LINUXAll]
+
+		// Due to vpxmt.lib we currently can't enable /safeseh in this project.
+		$ImageHasSafeExceptionHandlers		"false" [$WINDOWS]
+	}
+
+}
+
+$Project "panorama"
+{
+	$Folder "Resource Files"
+	{
+		$File "resource.h"
+		$File "panorama.rc"
+	}
+
+	$Folder "Protobuf Files"
+	{
+		$File "steamextra\common\uifontfile_format.proto" [!$SPLIT_PANORAMA_TEXT]
+
+		$Folder "Generated Files"
+		{
+			$DynamicFile "$GENERATED_PROTO_DIR\uifontfile_format.pb.cc" [!$SPLIT_PANORAMA_TEXT]
+			{
+				$Configuration
+				{
+					$Compiler 
+					{
+						$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+					}
+				}
+			}
+		}
+
+	}
+
+	$Folder "Public"
+	{
+		$File "$SRCDIR\public\panorama\panorama.h"
+		$File "$SRCDIR\public\panorama\panoramasymbol.h"
+		$File "$SRCDIR\public\panorama\panoramatypes.h"
+		$File "$SRCDIR\public\panorama\panoramacxx.h"
+		$File "$SRCDIR\public\panorama\iuiengine.h"
+		$File "$SRCDIR\public\panorama\iuisoundsystem.h"
+		$File "$SRCDIR\public\panorama\iuilayoutmanager.h"
+		$File "$SRCDIR\public\panorama\localization\ilocalize.h"
+		$File "$SRCDIR\public\panorama\iuipanel.h"
+		$File "$SRCDIR\public\panorama\iuipanelclient.h"
+		$File "$SRCDIR\public\panorama\iuipanelstyle.h"
+		$File "$SRCDIR\public\panorama\iuirenderengine.h"
+		$File "$SRCDIR\public\panorama\iuirenderdevice.h"
+		$File "$SRCDIR\public\panorama\iuistylefactory.h"
+		$File "$SRCDIR\public\panorama\iuiwindow.h"
+		$File "$SRCDIR\public\panorama\iuifilesystem.h"
+		$File "$SRCDIR\public\panorama\transformations.h"
+		$File "$SRCDIR\public\panorama\uievent.h"
+		$File "$SRCDIR\public\panorama\uievents.h"
+		$File "$SRCDIR\public\panorama\uijsregistration.h"
+		$File "$SRCDIR\public\panorama\uimetaprogramming.h"
+		$FILE "$SRCDIR\public\panorama\uischeduleddel.h"
+		$File "$SRCDIR\public\panorama\uitoplevelwindow.h"
+//JMC		$File "$SRCDIR\public\panorama\uitoplevelwindowoverlay.h"
+		$File "$SRCDIR\public\panorama\uiwebapiclient.h"
+		$File "$SRCDIR\public\panorama\uifileresource.h"
+		$File "$SRCDIR\public\panorama\uisettings.h"
+
+		$Folder "Data"
+		{
+			$File "$SRCDIR\public\panorama\data\iimagesource.h"
+			$File "$SRCDIR\public\panorama\data\imageloader.h"
+			$File "$SRCDIR\public\panorama\data\panoramavideoplayer.h"
+		}
+
+		$Folder "Layout"
+		{
+			$File "$SRCDIR\public\panorama\layout\csshelpers.h"
+			$File "$SRCDIR\public\panorama\layout\backgroundimage.h"
+			$File "$SRCDIR\public\panorama\layout\panel2dfactory.h"
+			$File "$SRCDIR\public\panorama\layout\uilength.h"
+			$File "$SRCDIR\public\panorama\layout\fillbrush.h"
+			$File "$SRCDIR\public\panorama\layout\stylefiletypes.h"
+			$File "$SRCDIR\public\panorama\layout\stylesymbol.h"
+		}
+
+		$Folder "Renderer"
+		{
+			$File "$SRCDIR\public\panorama\renderer\styleproperties.h"
+			$File "$SRCDIR\public\panorama\renderer\rendercommands.h"
+
+		}
+
+		$Folder "Text" [!$SPLIT_PANORAMA_TEXT]
+		{
+			$File "$SRCDIR\public\panorama\text\iuitextlayout.h"
+			$File "$SRCDIR\public\panorama\text\iuitextservices.h"
+		}
+
+		$Folder "Input"
+		{
+			$File "$SRCDIR\public\panorama\input\iuiinput.h"
+			$File "$SRCDIR\public\panorama\input\keycodes.h"
+			$File "$SRCDIR\public\panorama\input\mousecodes.h"
+			$File "$SRCDIR\public\panorama\input\mousecursors.h"
+			$File "$SRCDIR\public\panorama\input\gamepadcodes.h"
+		}
+
+	}
+
+	$Folder "UI Framework"
+	{
+		$File ".\ctx_debug.h"
+		$File ".\ctx_debug.cpp"
+		
+		$File ".\panoramasymbol.cpp"
+		$File ".\uiengine.h"
+		$File ".\uiengine.cpp"
+
+		$File ".\uisoundsystem.h"
+		$File ".\uisoundsystem.cpp"
+
+		$File ".\uievent.cpp"
+		$File ".\uievents.cpp"
+		$File ".\uifileresource.cpp"
+		$File ".\uijsregistration.cpp"
+		$File ".\uipanel.h"
+		$File ".\uipanel.cpp"
+		$File ".\uischeduleddel.cpp"
+		$File ".\uitoplevelwindow.cpp"
+
+
+		$File ".\uicommands.cpp"
+		$File ".\uicommands.h"
+		$File ".\uiwebapiclient.cpp"
+		$File ".\transformations.cpp"
+
+		$Folder "Layout"
+		{
+			$File ".\layout\backgroundimage.cpp"
+			$File ".\layout\csshelpers.cpp"
+			$File ".\layout\fillbrush.cpp"
+			$File ".\layout\layoutfile.h"
+			$File ".\layout\layoutfile.cpp"
+			$File ".\layout\panel2dfactory.cpp"
+			$File ".\layout\stylefile.h"
+			$File ".\layout\stylefile.cpp"
+			$File ".\layout\stylepropertyfactory.h"
+			$File ".\layout\stylepropertyfactory.cpp"
+			$File ".\layout\uilength.cpp"
+		}
+
+		$Folder "Input"
+		{
+			$File ".\input\uiinput.h"
+			$File ".\input\uiinput.cpp"
+			$File ".\input\controller.h"
+			$File ".\input\controller.cpp"
+			$File ".\input\steamcontroller.h"
+			$File ".\input\steamcontroller.cpp"
+			$File ".\input\mousecursor.h"
+			$File ".\input\mousecursor.cpp"
+		}
+
+		$Folder "Data"
+		{
+			$File ".\data\imageloader.cpp"
+			$File ".\data\panoramavideoplayer.cpp"
+			$File "..\common\imageloadwrapper.cpp" \
+				"..\common\tgaloader.cpp" \
+				"..\common\jpegloader_common.cpp" \
+				"..\common\jpegloader.cpp" \
+				"..\common\pngloader.cpp" \
+				"..\common\svg\svgloader.cpp" \
+				"..\common\svg\svghelpers.cpp"
+			{
+				$Configuration
+				{
+					$Compiler [$WINDOWS]
+					{
+						$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+					}
+				}
+			}
+
+			$File "..\common\pngloader.h"
+			$File "..\common\svg\svgloader.h"
+			$File "..\common\svg\svghelpers.h"
+		}
+		
+		$Folder "Localization"
+		{
+			$File ".\localization\localize.h"
+			$File ".\localization\localize.cpp"
+		}
+
+		$Folder "OpenGL Windows Support"
+		{
+			$File "renderer\win32openglfuncs.cpp" [$WINDOWS&&$OGL]
+		}
+
+
+		$Folder "Rendering"
+		{
+			$Folder "D3D Shaders"
+			{
+				$File ".\renderer\d3dshaders\orthographic2d.fx"
+			}
+			$File ".\renderer\uirenderengine.h"
+			$File ".\renderer\uirenderengine.cpp"
+			$File ".\renderer\rendercommands.cpp"
+			$File ".\renderer\iui3dsurface.h"
+			$File ".\renderer\d3d10d2dsurface.h" [$WINDOWS]
+
+			$File ".\renderer\opengllazyshaders.cpp" [$OGL] \
+				".\renderer\sdlopenglsurface.cpp" [$OGL] \
+				".\renderer\dwritetextrenderer.cpp" [$WINDOWS] \
+				".\renderer\d3d10d2dsurface.cpp" [$WINDOWS]
+			{
+				$Configuration 
+				{ 
+					// kept here to allow msdev to search in it
+					$ExcludedFromBuild "Yes"
+				} 
+			}
+			$File ".\renderer\dwritetextrenderer.h" [$WINDOWS]
+			$File ".\renderer\sdlopenglsurface.h" [$OGL]
+			$File ".\renderer\opengllazyshaders.h" [$OGL]
+			$File ".\renderer\styles.h"
+			$File ".\renderer\styles.cpp"
+			$File ".\renderer\styleproperties.cpp"
+			$File ".\renderer\uianimationengine.h"
+			$File ".\renderer\uianimationengine.cpp"
+		}
+
+		$Folder "Text" [!$SPLIT_PANORAMA_TEXT]
+		{
+			$File "steamextra\common\uifontfile.h"
+			$File "steamextra\common\uifontfile.cpp"
+			$File ".\text\uifontfileloaderlinux.h"
+			$File ".\text\uifontfileloaderlinux.cpp"
+			{
+				$Configuration
+				{
+					$Compiler [$WINDOWS]
+					{
+						$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+					}
+				}
+			}
+			$File ".\text\uifontfileloaderwin32.h" [$WINDOWS]
+			$File ".\text\uifontfileloaderosx.h" [$OSXALL]
+			$File ".\text\uitextlayoutwin32.h"
+			$File ".\text\uifontfileloaderwin32.cpp" [$WINDOWS] \
+				".\text\uifontfileloaderosx.cpp" [$OSXALL] \
+				".\text\uitextlayoutwin32.cpp" [$WINDOWS]
+			{
+				$Configuration 
+				{ 
+					// kept here to allow msdev to search in it
+					$ExcludedFromBuild "Yes" 
+				} 
+			}
+
+			$File ".\text\texttexturecache.h"
+			$File ".\text\texttexturecache.cpp"
+			$File ".\text\textlayoutdrawcache.h"
+			$File ".\text\textlayoutdrawcache.cpp"
+
+			$File ".\text\uitextlayoutpango.h"
+			$File ".\text\uitextlayoutpango.cpp"
+			$File ".\text\uitextservicespango.h"
+			$File ".\text\uitextservicespango.cpp"
+		}
+	}
+
+
+		
+
+
+
+	$File ".\stdafx.h"
+	$File ".\stdafx.cpp"
+	{
+		$Configuration 
+		{
+			$Compiler [$WINDOWS]
+			{
+				$Create/UsePrecompiledHeader			"Create Precompiled Header (/Yc)"
+			}
+		}
+	}
+
+	$Folder "Source 2"
+	{
+		$File "$SRCDIR\public\panorama\source2\ipanoramaui.h"
+		$File "source2\panoramauiengine.h"
+
+		$File "source2\uienginesource2.h"
+		$File "source2\uienginesource2.cpp"
+		$File "source2\uitoplevelwindowsource2.h"
+		$File "source2\uitoplevelwindowsource2.cpp"
+		$file "source2\uisoundsystemsource2.h"
+		$file "source2\uisoundsystemsource2.cpp"
+		$file "source2\uirenderdevicesource2.h"
+		$file "source2\uirenderdevicesource2.cpp"
+
+		$File "source2\renderer\source2surface.h"
+
+		$File "source2\imesource2.h"
+		$File "source2\imesource2.cpp"
+
+		$File "$SRCDIR/public/tier1/interface.h"
+		$File "$SRCDIR\public\filesystem_helpers.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+
+		$File "source2\renderer\source2surface.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+
+		$File "source2\panoramauiengine.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+
+
+		$File "$SRCDIR\common\currencyamount.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+		$File "$SRCDIR\common\language.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+		$File "$SRCDIR\common\timeutils.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+		$File "$SRCDIR\common\currencyamount.h"
+		$File "$SRCDIR\common\timeutils.h"
+		
+	}
+
+	$Folder "Link Libraries"
+	{
+		$LibExternal	libprotobuf [!$VS2013 && !$VS2015]
+		$Libexternal	$LIBPUBLIC\2013\libprotobuf [$VS2013]
+		$Libexternal	$LIBPUBLIC\2015\libprotobuf [$VS2015]
+		{
+			$Configuration "Debug" { $ExcludedFromBuild "Yes" }
+		}
+
+		$Libexternal	$LIBPUBLIC\2015\debug\libprotobuf [$VS2015]
+		{
+			$Configuration "Release" { $ExcludedFromBuild "Yes" }
+		}
+
+		$Lib			"bitmap"
+		$Lib			"vtf"
+
+		$Lib	"$LIBPUBLIC\tier2"
+		$Lib	"$LIBPUBLIC\tier3"
+		$Lib	"$LIBPUBLIC\resourcefile"
+		$Lib	"$LIBPUBLIC\socketlib"				[ $WINDOWS ]
+
+
+		$ImplibExternal	steam_api					[ ( $WIN32 || $POSIX || $PS3 ) && !$NO_STEAM ]
+		$ImplibExternal	steam_api64					[ $WIN64 && !$NO_STEAM ]
+
+		$File "..\lib\common\bzip2.lib" [$WINDOWS && !$VS2015]
+		$File "..\lib\common\vc14\bzip2.lib" [$WINDOWS && $VS2015]
+		$Lib 	"$LIBCOMMON\jpeglib"
+		$Lib	"$LIBPUBLIC\libz" [!$OSXALL]
+
+		$File "..\lib\common\libpng\libpng.lib"	 [$WINDOWS && !$VS2015]
+		$File "..\lib\common\libpng\2015\libpng.lib"	 [$WINDOWS && $VS2015]
+		$LibExternal "$SRCDIR/lib/$PLATFORM/release/libpng"		[$POSIX]
+		
+		$File "$LIBPUBLIC\libprotobuf.a" [$POSIX]
+		
+		$File "$SRCDIR\lib\common\libeay32.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$File "$SRCDIR\lib\common\ssleay32.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$File "$SRCDIR\lib\common\$PLATFORM\libssl.a"		[$POSIX && !$SPLIT_PANORAMA_TEXT]
+
+		$Lib	"$LIBPUBLIC\mathlib"
+
+		$Lib	"$LIBPUBLIC\panorama_s1wrapper"
+
+		$File "$SRCDIR\lib\public\$PLATFORM\libsdl2.dylib" [$OSXALL]
+		//$File "$SRCDIR\lib\public\$PLATFORM\sdl2.lib"		[$WINDOWS]
+
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8_libbase.so"	[$LINUXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8_libplatform.so"	[$LINUXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8.so"	[$LINUXALL]
+
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8_libbase.dylib"	[$OSXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8_libplatform.dylib"	[$OSXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libv8.dylib"	[$OSXALL]
+
+		$File "$SRCDIR\lib\common\$PLATFORM\2015\v8_libbase.dll.lib" [$WINDOWS && $VS2015]
+		$File "$SRCDIR\lib\common\$PLATFORM\2015\v8_libplatform.dll.lib" [$WINDOWS && $VS2015]
+		$File "$SRCDIR\lib\common\$PLATFORM\2015\v8.dll.lib" [$WINDOWS && $VS2015]
+
+				
+		$File "$SRCDIR\lib\common\$PLATFORM\v8_libbase.lib" [$WINDOWS && !$VS2015] \
+			  "$SRCDIR\lib\common\$PLATFORM\v8_libplatform.lib" [$WINDOWS && !$VS2015] \
+		      "$SRCDIR\lib\common\$PLATFORM\v8.lib" [$WINDOWS && !$VS2015]
+		{
+			$Configuration "Debug" { $ExcludedFromBuild "Yes" }
+		}
+
+		$File "$SRCDIR\lib\common\$PLATFORM\debug\v8_libbase.lib" [$WINDOWS && !$VS2015] \
+			  "$SRCDIR\lib\common\$PLATFORM\debug\v8_libplatform.lib" [$WINDOWS && !$VS2015] \
+		      "$SRCDIR\lib\common\$PLATFORM\debug\v8.lib" [$WINDOWS && !$VS2015]
+		{
+			$Configuration "Release" { $ExcludedFromBuild "Yes" }
+		}
+
+		$File "$SRCDIR\lib\common\parsifal.lib" [$WINDOWS]
+		$File "$SRCDIR\lib\common\$PLATFORM\libparsifal.a" [$POSIX]
+		$File "$SRCDIR\thirdparty\gperftools-2.0\.libs\libprofiler.so" [$GPROFILER]
+
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\video.lib" [$WIN32]
+		$DynamicFile "$SRCDIR\lib\common\$PLATFORM\video64.lib" [$WIN64]
+		
+		$ImplibExternal "video" [$LINUXALL]
+		$File "$SRCDIR\lib\common\$PLATFORM\libvideo.dylib" [$OSXALL]
+
+		$DynamicFile "$SRCDIR\lib\common\pango-1.0.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$DynamicFile "$SRCDIR\lib\common\pangoft2-1.0.lib"	[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$DynamicFile "$SRCDIR\lib\common\fontconfig.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$DynamicFile "$SRCDIR\lib\common\gobject-2.0.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$DynamicFile "$SRCDIR\lib\common\glib-2.0.lib"		[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+		$DynamicFile "$SRCDIR\lib\common\libfreetype-6.lib"	[$WINDOWS && !$SPLIT_PANORAMA_TEXT]
+
+		$ImpLib "$LIBCOMMON\pango-1.0"		[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+		$ImpLib "$LIBCOMMON\pangoft2-1.0"	[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+		$ImpLib "$LIBCOMMON\fontconfig"		[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+		$ImpLib "$LIBCOMMON\gobject-2.0"	[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+		$ImpLib "$LIBCOMMON\glib-2.0"		[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+		$ImpLib "$LIBCOMMON\freetype"		[$OSXALL && !$SPLIT_PANORAMA_TEXT]
+
+		$ImpLib "cairo"
+
+		$Implib togl [!$IS_LIB_PROJECT && $GL && !$DEDICATED]
+
+
+	}
+	
+//APS	$include "$SRCDIR\external\libparsifal-0.8.3\parsifal_include.vpc"
+//APS	$include "$SRCDIR\common\steamcommon_client_include.vpc"
+}

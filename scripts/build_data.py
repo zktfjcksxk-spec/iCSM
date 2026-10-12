@@ -145,8 +145,10 @@ class ReleaseStream(io.RawIOBase):
         self.path = self.cache / part['name']
         for attempt in range(3):
             try:
-                run(['gh', 'release', 'download', self.index['tag'], '--repo', self.repository,
-                     '--pattern', part['name'], '--dir', str(self.cache), '--clobber'])
+                if not (self.path.is_file() and self.path.stat().st_size == part['size']
+                        and file_hash(self.path) == part['sha256']):
+                    run(['gh', 'release', 'download', self.index['tag'], '--repo', self.repository,
+                         '--pattern', part['name'], '--dir', str(self.cache), '--clobber'])
                 require(self.path.stat().st_size == part['size']
                         and file_hash(self.path) == part['sha256'], 'Input volume checksum mismatch')
                 break

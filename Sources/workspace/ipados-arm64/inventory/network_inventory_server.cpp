@@ -5,6 +5,7 @@
 #include "weapon_csbase.h"
 #include "igamesystem.h"
 #include "offline_skin.h"
+#include "offline_stickers.h"
 #include "network_inventory_server.h"
 
 static ConVar icsm_inventory_protocol("icsm_inventory_protocol", "0",
@@ -16,6 +17,7 @@ struct Record
 {
     int team, slot, definition, selected;
     ICSMSkin::Selection skin;
+    ICSMStickers::Selection stickers;
 };
 struct State
 {
@@ -24,11 +26,11 @@ struct State
     CUtlVector<Record> pending;
     float nextReceive;
     bool ready;
-    int userID, generation, nextBatch, expected, pendingJoin;
+    int userID, generation, nextBatch, expected, pendingJoin, protocol;
     float joinDeadline;
     bool joinTimedOut;
     State() : nextReceive(0), ready(false), userID(0), generation(0), nextBatch(0),
-        expected(0), pendingJoin(-1), joinDeadline(0), joinTimedOut(false) {}
+        expected(0), pendingJoin(-1), protocol(1), joinDeadline(0), joinTimedOut(false) {}
 };
 static State players[MAX_PLAYERS + 1];
 
@@ -96,6 +98,7 @@ void ApplyPaint(CCSPlayer *player, CWeaponCSBase *weapon)
         item->SetOrAddAttributeValueByName("set item texture prefab", float(record.skin.paint));
         item->SetOrAddAttributeValueByName("set item texture seed", float(record.skin.seed));
         item->SetOrAddAttributeValueByName("set item texture wear", record.skin.wear);
+        ICSMStickers::Apply(item,record.stickers);
         // ItemGeneration initialized the base item before this recipe existed.
         // Refresh through the original public attribute initialization path;
         // DispatchSpawn does not call it again on this server depot.
@@ -111,19 +114,21 @@ bool Receive(CCSPlayer *player, KeyValues *message)
     if (!message || V_strcmp(message->GetName(), "iCSMPrivateInventory")) return false;
     State *state = Get(player);
     if (!state || !gpGlobals) { Warning("ICSM_NET_INVENTORY rejected sender\n"); return true; }
-    if (message->GetInt("version") != 1) { Warning("ICSM_NET_INVENTORY rejected version\n"); return true; }
+    const int version=message->GetInt("version");
+    if(version!=1 && version!=2)return true;
+    const int rowsPerBatch=version==2?1:3;
     const int generation = message->GetInt("generation", -1), batch = message->GetInt("batch", -1), count = message->GetInt("count", -1);
-    if (generation < 1 || batch < 0 || batch > 85 || count < 1 || count > 256) return true;
+    if (generation < 1 || batch < 0 || batch > 255 || count < 1 || count > 256) return true;
     if (generation != state->generation)
     {
         if (batch || gpGlobals->curtime < state->nextReceive) return true;
         state->nextReceive = gpGlobals->curtime + 0.5f;
-        state->pending.RemoveAll(); state->generation = generation; state->nextBatch = 0; state->expected = count;
+        state->pending.RemoveAll(); state->generation = generation; state->nextBatch = 0; state->expected = count; state->protocol=version;
     }
-    if (count != state->expected || batch > state->nextBatch) return true;
+    if (version != state->protocol || count != state->expected || batch > state->nextBatch) return true;
     if (batch < state->nextBatch)
     {
-        engine->ClientCommand(player->edict(), "icsm_inventory_ack 1 %d %d\n", generation, batch);
+        engine->ClientCommand(player->edict(), "icsm_inventory_ack %d %d %d\n", version, generation, batch);
         return true;
     }
     KeyValues *entries = message->FindKey("entries");
@@ -131,7 +136,7 @@ bool Receive(CCSPlayer *player, KeyValues *message)
     CUtlVector<Record> records;
     FOR_EACH_SUBKEY(entries, row)
     {
-        if (records.Count() >= 3) { Warning("ICSM_NET_INVENTORY rejected size\n"); return true; }
+        if (records.Count() >= rowsPerBatch) { Warning("ICSM_NET_INVENTORY rejected size\n"); return true; }
         Record record;
         record.team = row->GetInt("team", -1);
         record.slot = row->GetInt("slot", -1);
@@ -147,6 +152,11 @@ bool Receive(CCSPlayer *player, KeyValues *message)
             Warning("ICSM_NET_INVENTORY rejected player=%d definition=%d paint=%d\n", player->GetUserID(), record.definition, record.skin.paint);
             return true;
         }
+        if(version==2)for(int n=0;n<ICSMStickers::MaxSlots;++n) {
+            char field[8];V_snprintf(field,sizeof(field),"s%d",n);int id=row->GetInt(field);
+            if(id && !ICSMStickers::Valid(record.definition,n,id))return true;
+            record.stickers.ids[n]=id;
+        }
         for (int source = 0; source < 2; ++source)
         {
             const CUtlVector<Record> &previous = source ? records : state->pending;
@@ -157,7 +167,7 @@ bool Receive(CCSPlayer *player, KeyValues *message)
         }
         records.AddToTail(record);
     }
-    if (state->pending.Count() != batch * 3 || records.Count() != MIN(3, count - batch * 3)) return true;
+    if (state->pending.Count() != batch * rowsPerBatch || records.Count() != MIN(rowsPerBatch, count - batch * rowsPerBatch)) return true;
     FOR_EACH_VEC(records, i) state->pending.AddToTail(records[i]);
     ++state->nextBatch;
     if (state->pending.Count() == count)
@@ -171,7 +181,7 @@ bool Receive(CCSPlayer *player, KeyValues *message)
             player->HandleCommand_JoinTeam(team);
         }
     }
-    engine->ClientCommand(player->edict(), "icsm_inventory_ack 1 %d %d\n", generation, batch);
+    engine->ClientCommand(player->edict(), "icsm_inventory_ack %d %d %d\n", version, generation, batch);
     return true;
 }
 
@@ -184,7 +194,7 @@ public:
         // Original Host_BuildConVarUpdateMessage sends only values that differ
         // from their default during signon. Share default 0 with the client,
         // then advertise support before any remote player signs on.
-        icsm_inventory_protocol.SetValue(1);
+        icsm_inventory_protocol.SetValue(2);
     }
     void LevelShutdownPostEntity() OVERRIDE
     {

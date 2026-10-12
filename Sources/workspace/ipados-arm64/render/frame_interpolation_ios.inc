@@ -10,6 +10,7 @@
 #include <deque>
 #include <chrono>
 #include <cmath>
+#include <mach/mach_time.h>
 static ConVar icsm_metal_frame_interpolation("icsm_metal_frame_interpolation","0",
     FCVAR_ARCHIVE|FCVAR_RELEASE,"Experimental MetalFX 60 rendered -> 120 displayed frames",true,0,true,1);
 static ConVar icsm_metal_frame_motion("icsm_metal_frame_motion","1",FCVAR_RELEASE,
@@ -22,10 +23,18 @@ static ConVar icsm_metal_frame_adaptive("icsm_metal_frame_adaptive","1",FCVAR_RE
     "Temporarily suspend generation when it hurts the native render cadence",true,0,true,1);
 static ConVar icsm_metal_frame_compact("icsm_metal_frame_compact","1",FCVAR_RELEASE,
     "Interpolate native scene pixels before spatial expansion; preserve full-resolution UI",true,0,true,1);
-static ConVar icsm_metal_frame_scale("icsm_metal_frame_scale","75",FCVAR_RELEASE,
+static ConVar icsm_metal_frame_scale("icsm_metal_frame_scale","50",FCVAR_RELEASE,
     "Percentage of native scene pixels used by MetalFX interpolation; real Source scene and HUD stay unchanged",true,50,true,100);
+static ConVar icsm_metal_frame_color_scale("icsm_metal_frame_color_scale","50",FCVAR_ARCHIVE|FCVAR_RELEASE,
+    "Interpolation color detail percentage, independent of motion/depth input density",true,50,true,100);
+static ConVar icsm_metal_frame_quality("icsm_metal_frame_quality","1",FCVAR_RELEASE,
+    "Reject occluded/ambiguous optical residuals and preserve unclipped camera motion",true,0,true,1);
 static ConVar icsm_metal_frame_adaptive_legacy("icsm_metal_frame_adaptive_legacy","0",FCVAR_RELEASE,
     "Diagnostic A/B for the previous sensitive 54Hz suspension/cooldown policy",true,0,true,1);
+static ConVar icsm_metal_frame_pacing("icsm_metal_frame_pacing","1",FCVAR_RELEASE,
+    "Pace interpolated/real pairs from GPU completion with a timed GPU event; 0 is legacy CPU pacing",true,0,true,1);
+static ConVar icsm_metal_frame_fused_ui("icsm_metal_frame_fused_ui","1",FCVAR_RELEASE,
+    "Composite native HUD/viewmodel in the existing presentation draw, avoiding a full-screen compute round trip",true,0,true,1);
 static bool fgRequested() {
     static ConVarRef limit("icsm_fps_limit",true);
     // The renderer can start before the client registers its FPS preference.
@@ -47,15 +56,18 @@ struct FGSlot {
     ICSMInterpolationView view{};
     unsigned long long frame=0,readyValue=0;
     bool busy=false,depthCaptured=false,colorCaptured=false,maskCaptured=false,compactCaptured=false;
-    double time=0,inputTime=0;
+    double time=0,inputTime=0,gpuReadyTime=0,cadence=1.0/60.0;
+    bool gpuReady=false,gpuFailed=false;
 };
 struct FGJob {
     std::shared_ptr<FGSlot> slot;
     float gamma[256][4];
     bool interpolate=false;
     bool lowLatency=true;
+    bool eventPacing=true,fusedUI=true,protectViewmodel=true;
 };
-struct FGPresentRecord { double time; bool generated; unsigned long long frame; double age; };
+struct FGPaceRequest { unsigned long long value; double deadline; };
+struct FGPresentRecord { double time; bool generated; unsigned long long frame; double age,gpuReadyAge; };
 struct FGHitchRecord { unsigned long long frame; double time,interval,cpu,gpu; bool paused; };
 struct FGState {
     Device *owner=nullptr;
@@ -63,7 +75,8 @@ struct FGState {
     id<MTLFXSpatialScaler> expansion=nil;
     id<MTLCommandQueue> queue=nil;
     id<MTLSharedEvent> ready=nil;
-    id<MTLRenderPipelineState> depthPSO=nil,copyPSO=nil;
+    id<MTLSharedEvent> pace=nil;
+    id<MTLRenderPipelineState> depthPSO=nil,copyPSO=nil,generatedPSO=nil;
     id<MTLComputePipelineState> flowPSO=nil,motionPSO=nil;
     id<MTLComputePipelineState> lumaPSO=nil,maskPSO=nil,dilatePSO=nil,protectPSO=nil;
     id<MTLComputePipelineState> resizePSO=nil;
@@ -87,9 +100,13 @@ struct FGState {
     std::atomic<bool> fault{false};
     bool captureRequested=false;
     std::thread thread;
+    std::thread pacingThread;
+    bool pacingStopping=false;
+    unsigned long long paceValue=0;
     std::mutex mutex,statsMutex;
     std::condition_variable cv;
     std::deque<FGJob> jobs;
+    std::deque<FGPaceRequest> paceRequests;
     std::deque<FGPresentRecord> presents;
     std::deque<double> renderTimes,gpuTimes;
     std::deque<double> gateWaits;
@@ -99,6 +116,8 @@ struct FGState {
     ~FGState() {
         {std::lock_guard<std::mutex> lock(mutex);stopping=true;cv.notify_all();}
         if(thread.joinable())thread.join();
+        {std::lock_guard<std::mutex> lock(mutex);pacingStopping=true;cv.notify_all();}
+        if(pacingThread.joinable())pacingThread.join();
     }
 };
 static FGState fg;
@@ -110,7 +129,7 @@ static simd_float4x4 fgMatrix(const float *m) {
 static void fgError(NSString *why) {
     std::lock_guard<std::mutex> lock(fg.statsMutex);fg.error=why;
 }
-static void fgPresented(id<MTLDrawable> drawable,bool generated,unsigned long long frame,double inputTime) {
+static void fgPresented(id<MTLDrawable> drawable,bool generated,unsigned long long frame,double inputTime,double readyTime) {
     if(!generated) {
         std::lock_guard<std::mutex> lock(fg.mutex);
         if(fg.awaitingReal)--fg.awaitingReal;fg.cv.notify_all();
@@ -118,9 +137,36 @@ static void fgPresented(id<MTLDrawable> drawable,bool generated,unsigned long lo
     std::lock_guard<std::mutex> lock(fg.statsMutex);
     const double time=drawable.presentedTime;
     if(time<=0){++fg.notPresented;return;}
-    fg.presents.push_back({time,generated,frame,(time-inputTime)*1000});
+    fg.presents.push_back({time,generated,frame,(time-inputTime)*1000,readyTime>inputTime?(readyTime-inputTime)*1000:0});
     if(generated)++fg.actualGenerated;else ++fg.actualRendered;
     while(fg.presents.size()>2400)fg.presents.pop_front();
+}
+// Apple WWDC25/211 uses a dedicated high-priority timer to release the real
+// frame halfway through the GPU-completion cadence. The presentation thread
+// can encode both copies immediately; CPU scheduling jitter does not delay
+// drawable acquisition, and the second present waits on the GPU event.
+static void fgPacingWorker() {
+    @autoreleasepool {
+    NSThread.currentThread.name=@"iCSM MetalFX pacing";
+    NSThread.currentThread.qualityOfService=NSQualityOfServiceUserInteractive;
+    mach_timebase_info_data_t info;mach_timebase_info(&info);
+    for(;;) {
+        FGPaceRequest request;
+        {
+            std::unique_lock<std::mutex> lock(fg.mutex);
+            fg.cv.wait(lock,[]{return fg.pacingStopping || !fg.paceRequests.empty();});
+            if(fg.pacingStopping && fg.paceRequests.empty())break;
+            request=fg.paceRequests.front();fg.paceRequests.pop_front();
+        }
+        const double remaining=request.deadline-CACurrentMediaTime();
+        if(remaining>0) {
+            const uint64_t ticks=uint64_t(remaining*1e9*double(info.denom)/double(info.numer));
+            const uint64_t deadline=mach_absolute_time()+ticks;
+            while(mach_wait_until(deadline)==KERN_ABORTED){}
+        }
+        fg.pace.signaledValue=request.value;
+    }
+    }
 }
 static void fgWorker() {
     @autoreleasepool {
@@ -135,17 +181,39 @@ static void fgWorker() {
             if(fg.stopping && fg.jobs.empty())break;
             job=fg.jobs.front();fg.jobs.pop_front();fg.working=true;
         }
+        if(job.eventPacing) {
+            // A drawable must not occupy the display queue while its Source
+            // scene/MetalFX inputs are still being rendered on the other queue.
+            std::unique_lock<std::mutex> lock(fg.mutex);
+            fg.cv.wait(lock,[&]{return job.slot->gpuReady;});
+            if(job.slot->gpuFailed) {
+                job.slot->busy=false;if(fg.awaitingReal)--fg.awaitingReal;
+                fg.working=false;fg.cv.notify_all();continue;
+            }
+        }
+        const double pairReady=CACurrentMediaTime();
+        id<MTLCommandBuffer> lastJobPresent=nil;
         unsigned count=job.interpolate?2:1;
         for(unsigned i=0;i<count;i++)@autoreleasepool {
             bool generated=job.interpolate && i==0;
             const double now=CACurrentMediaTime();
             // Never catch up by emitting a burst of already late frames.
-            if(deadline<now || deadline>now+.1)deadline=now;
-            if(deadline>now)std::this_thread::sleep_for(std::chrono::duration<double>(deadline-now));
+            if(!job.eventPacing) {
+                if(deadline<now || deadline>now+.1)deadline=now;
+                if(deadline>now)std::this_thread::sleep_for(std::chrono::duration<double>(deadline-now));
+            }
             id<CAMetalDrawable> drawable=[fg.layer nextDrawable];
             if(!drawable){
                 fgError(@"CAMetalLayer returned no drawable");fg.fault=true;
                 if(!generated){std::lock_guard<std::mutex> lock(fg.mutex);if(fg.awaitingReal)--fg.awaitingReal;fg.cv.notify_all();}
+                // No later command can release this slot when the final
+                // drawable fails. Keep lifecycle drains finite on this path.
+                if(i+1==count){
+                    // A generated copy may already be using this slot. This
+                    // exceptional path has no real-frame completion callback.
+                    [lastJobPresent waitUntilCompleted];
+                    std::lock_guard<std::mutex> lock(fg.mutex);job.slot->busy=false;fg.cv.notify_all();
+                }
                 continue;
             }
             // Catch up with current gameplay after a stall instead of feeding
@@ -162,9 +230,17 @@ static void fgWorker() {
             pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;
             pass.colorAttachments[0].storeAction=MTLStoreActionStore;
             auto encoder=[command renderCommandEncoderWithDescriptor:pass];
-            [encoder setRenderPipelineState:fg.copyPSO];
+            [encoder setRenderPipelineState:generated && job.fusedUI?fg.generatedPSO:fg.copyPSO];
             [encoder setFragmentTexture:generated?job.slot->generated:job.slot->ui atIndex:0];
             [encoder setFragmentBytes:job.gamma length:sizeof(job.gamma) atIndex:0];
+            if(generated && job.fusedUI) {
+                [encoder setFragmentTexture:job.slot->ui atIndex:1];
+                [encoder setFragmentTexture:job.slot->scene atIndex:2];
+                [encoder setFragmentTexture:job.slot->mask atIndex:3];
+                [encoder setFragmentTexture:job.slot->maskScratch atIndex:4];
+                const unsigned protect=job.protectViewmodel?1:0;
+                [encoder setFragmentBytes:&protect length:sizeof(protect) atIndex:1];
+            }
             [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
             [encoder endEncoding];
             // Existing touch renderer explicitly supports a rendering thread:
@@ -175,7 +251,19 @@ static void fgWorker() {
             SourceTouchRenderMetal((__bridge void*)command,(__bridge void*)drawable.texture);
             const auto frame=job.slot->frame;
             const auto inputTime=job.slot->inputTime;
-            [drawable addPresentedHandler:^(id<MTLDrawable> shown){fgPresented(shown,generated,frame,inputTime);}];
+            const double readyTime=job.eventPacing?job.slot->gpuReadyTime:0;
+            [drawable addPresentedHandler:^(id<MTLDrawable> shown){fgPresented(shown,generated,frame,inputTime,readyTime);}];
+            if(job.eventPacing && i==1) {
+                // Match Apple's 31/64 completion interval, leaving a small
+                // scheduling margin before the half-frame display boundary.
+                const double half=std::min(1.0/30.0,std::max(1.0/60.0,job.slot->cadence))*31.0/64.0;
+                unsigned long long value;
+                {
+                    std::lock_guard<std::mutex> lock(fg.mutex);
+                    value=++fg.paceValue;fg.paceRequests.push_back({value,pairReady+half});fg.cv.notify_all();
+                }
+                [command encodeWaitForEvent:fg.pace value:value];
+            }
             [command presentDrawable:drawable afterMinimumDuration:1.0/120.0];
             [command addCompletedHandler:^(id<MTLCommandBuffer> done){
                 if(done.error){
@@ -193,8 +281,8 @@ static void fgWorker() {
                     slot->busy=false;--fg.gpuJobs;fg.cv.notify_all();
                 }];
             }
-            [command commit];fg.lastPresent=command;
-            deadline+=1.0/120.0;
+            [command commit];fg.lastPresent=lastJobPresent=command;
+            if(!job.eventPacing)deadline+=1.0/120.0;
         }
         if(!job.lowLatency)[fg.lastPresent waitUntilCompleted]; // explicit A/B only
         {
@@ -226,16 +314,19 @@ static id<MTLTexture> fgTexture(MTLPixelFormat format,unsigned w,unsigned h,MTLT
 static bool fgInitialize(Device &d,unsigned w,unsigned h,unsigned nativeW,unsigned nativeH) {
     const float scale=icsm_metal_frame_compact.GetBool()?icsm_metal_frame_scale.GetFloat()*.01f:1.f;
     const unsigned iw=std::max(1u,unsigned(lroundf(nativeW*scale))),ih=std::max(1u,unsigned(lroundf(nativeH*scale)));
+    const float colorScale=icsm_metal_frame_color_scale.GetFloat()*.01f;
+    const unsigned ew=icsm_metal_frame_compact.GetBool()?std::max(1u,unsigned(lroundf(nativeW*colorScale))):w;
+    const unsigned eh=icsm_metal_frame_compact.GetBool()?std::max(1u,unsigned(lroundf(nativeH*colorScale))):h;
     if(!fg.checked) {
         fg.checked=true;
         if(@available(iOS 26.0,*))fg.supported=[MTLFXFrameInterpolatorDescriptor supportsDevice:device()];
     }
     if(!fg.supported){fgError(@"Native MetalFX frame interpolation unsupported");return false;}
-    if(fg.owner==&d && fg.layer==layer() && fg.width==w && fg.height==h && fg.inputWidth==iw && fg.inputHeight==ih && fg.nativeWidth==nativeW && fg.nativeHeight==nativeH && fg.compact==icsm_metal_frame_compact.GetBool())
-        return fg.effect && (fg.expansion || (fg.effectWidth==w && fg.effectHeight==h)) && fg.depthPSO && fg.copyPSO && fg.flowPSO && fg.motionPSO && fg.lumaPSO && fg.maskPSO && fg.dilatePSO && fg.protectPSO && fg.resizePSO;
+    if(fg.owner==&d && fg.layer==layer() && fg.width==w && fg.height==h && fg.inputWidth==iw && fg.inputHeight==ih && fg.effectWidth==ew && fg.effectHeight==eh && fg.nativeWidth==nativeW && fg.nativeHeight==nativeH && fg.compact==icsm_metal_frame_compact.GetBool())
+        return fg.effect && (fg.expansion || (fg.effectWidth==w && fg.effectHeight==h)) && fg.depthPSO && fg.copyPSO && fg.generatedPSO && fg.flowPSO && fg.motionPSO && fg.lumaPSO && fg.maskPSO && fg.dilatePSO && fg.protectPSO && fg.resizePSO;
     fgDrain();fg.owner=&d;fg.width=w;fg.height=h;fg.inputWidth=iw;fg.inputHeight=ih;fg.layer=layer();
     fg.nativeWidth=nativeW;fg.nativeHeight=nativeH;
-    fg.compact=icsm_metal_frame_compact.GetBool();fg.effectWidth=fg.compact?iw:w;fg.effectHeight=fg.compact?ih:h;
+    fg.compact=icsm_metal_frame_compact.GetBool();fg.effectWidth=ew;fg.effectHeight=eh;
     // Connect the framework's virtual controller on the existing main thread.
     SourceTouchInitialize((__bridge void*)device());
     auto desc=[MTLFXFrameInterpolatorDescriptor new];
@@ -266,6 +357,8 @@ static bool fgInitialize(Device &d,unsigned w,unsigned h,unsigned nativeW,unsign
         pipeline.colorAttachments[0].pixelFormat=fg.layer.pixelFormat;
         pipeline.fragmentFunction=[library newFunctionWithName:@"fg_copy"];
         fg.copyPSO=[device() newRenderPipelineStateWithDescriptor:pipeline error:&error];
+        pipeline.fragmentFunction=[library newFunctionWithName:@"fg_present_generated"];
+        fg.generatedPSO=[device() newRenderPipelineStateWithDescriptor:pipeline error:&error];
         fg.flowPSO=[device() newComputePipelineStateWithFunction:[library newFunctionWithName:@"fg_flow"] error:&error];
         fg.motionPSO=[device() newComputePipelineStateWithFunction:[library newFunctionWithName:@"fg_motion"] error:&error];
         fg.lumaPSO=[device() newComputePipelineStateWithFunction:[library newFunctionWithName:@"fg_luma"] error:&error];
@@ -275,7 +368,7 @@ static bool fgInitialize(Device &d,unsigned w,unsigned h,unsigned nativeW,unsign
         fg.resizePSO=[device() newComputePipelineStateWithFunction:[library newFunctionWithName:@"fg_resize"] error:&error];
         auto depth=[MTLDepthStencilDescriptor new];depth.depthCompareFunction=MTLCompareFunctionAlways;depth.depthWriteEnabled=YES;
         fg.depthState=[device() newDepthStencilStateWithDescriptor:depth];
-        if(!fg.depthPSO || !fg.copyPSO || !fg.flowPSO || !fg.motionPSO || !fg.lumaPSO || !fg.maskPSO || !fg.dilatePSO || !fg.protectPSO || !fg.resizePSO){fgError(error.description?:@"Frame generation pipeline creation failed");return false;}
+        if(!fg.depthPSO || !fg.copyPSO || !fg.generatedPSO || !fg.flowPSO || !fg.motionPSO || !fg.lumaPSO || !fg.maskPSO || !fg.dilatePSO || !fg.protectPSO || !fg.resizePSO){fgError(error.description?:@"Frame generation pipeline creation failed");return false;}
     }
     for(auto &slot:fg.slots) {
         slot=std::make_shared<FGSlot>();
@@ -292,7 +385,8 @@ static bool fgInitialize(Device &d,unsigned w,unsigned h,unsigned nativeW,unsign
         slot->maskScratch=fgTexture(MTLPixelFormatR8Unorm,iw,ih,MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite,@"Viewmodel mask scratch");
         if(!slot->scene || !slot->ui || !slot->depth || !slot->motion || !slot->flow || !slot->generated || !slot->luma || !slot->mask || !slot->maskScratch || !slot->compactColor || !slot->intermediate){fgError(@"Frame generation texture allocation failed");return false;}
     }
-    if(!fg.queue){fg.queue=[device() newCommandQueue];fg.queue.label=@"iCSM bounded MetalFX present queue";fg.ready=[device() newSharedEvent];}
+    if(!fg.queue){fg.queue=[device() newCommandQueue];fg.queue.label=@"iCSM bounded MetalFX present queue";fg.ready=[device() newSharedEvent];fg.pace=[device() newSharedEvent];}
+    if(!fg.pacingThread.joinable())fg.pacingThread=std::thread(fgPacingWorker);
     if(!fg.thread.joinable())fg.thread=std::thread(fgWorker);
     fgError(@"");return true;
 }
@@ -311,6 +405,7 @@ static void fgDepth(Device &d,id<MTLTexture> source,const ICSMInterpolationView 
         std::unique_lock<std::mutex> lock(fg.mutex);
         fg.cv.wait(lock,[&]{for(auto &s:fg.slots)if(!s->busy && s!=fg.previous){slot=s;return true;}return false;});
         slot->busy=true;
+        slot->gpuReady=slot->gpuFailed=false;
     }
     fg.current=slot;slot->view=view;slot->frame=d.frame;slot->time=CACurrentMediaTime();
     slot->inputTime=fg.inputStarted>0?fg.inputStarted:slot->time;
@@ -398,11 +493,22 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     // Sample at the same frame-start boundary; varying world-render duration
     // must not look like a change to the engine's actual native cadence.
     const double cadence=slot->inputTime-previous->inputTime;
+    slot->cadence=cadence>.001 && cadence<.1?cadence:1.0/60.0;
     const double simulationDelta=slot->view.simulationTime-previous->view.simulationTime;
     float cameraTravelSquared=0;
     for(unsigned i=0;i<3;i++){const float step=slot->view.cameraOrigin[i]-previous->view.cameraOrigin[i];cameraTravelSquared+=step*step;}
     bool reset=previous==slot || delta<.001 || delta>.1 || cameraTravelSquared>128.f*128.f ||
         fabsf(slot->view.verticalFOV-previous->view.verticalFOV)>15;
+    if(icsm_metal_frame_quality.GetBool()) {
+        // A discontinuous spectator/teleport camera cut invalidates history.
+        // Use the real Source view forward basis, independent of map names.
+        float directionDot=0,oldLength=0,newLength=0;
+        for(unsigned i=0;i<3;i++) {
+            const float old=previous->view.worldToView[8+i],now=slot->view.worldToView[8+i];
+            directionDot+=old*now;oldLength+=old*old;newLength+=now*now;
+        }
+        if(oldLength>0 && newLength>0 && directionDot/sqrtf(oldLength*newLength)<.70710678f)reset=true;
+    }
     if(cadence>.001 && cadence<.1)fg.cadenceEMA=fg.cadenceEMA*.9+cadence*.1;
     if(!icsm_metal_frame_adaptive.GetBool()){fg.adaptivePaused=false;fg.overBudget=fg.recoveryFrames=0;}
     else if(!reset) {
@@ -431,6 +537,7 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     bool interpolate=encodeEffect && !reset;
     if(encodeEffect) {
     FGCamera camera{};camera.size={fg.inputWidth,fg.inputHeight};camera.reset=reset;
+    camera.pad=icsm_metal_frame_quality.GetBool()?1:0;
     camera.reprojection=simd_mul(fgMatrix(previous->view.worldToClip),simd_inverse(fgMatrix(slot->view.worldToClip)));
     const unsigned refine=icsm_metal_frame_motion.GetBool()?1:0;
     auto encoder=[d.command computeCommandEncoder];encoder.label=@"iCSM depth camera reprojection and image motion estimate";
@@ -449,6 +556,7 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
         [encoder setTexture:slot->luma atIndex:0];[encoder setTexture:previous->luma atIndex:1];
         [encoder setTexture:slot->depth atIndex:2];[encoder setTexture:slot->flow atIndex:3];
         [encoder setTexture:slot->mask atIndex:4];[encoder setTexture:previous->mask atIndex:5];
+        [encoder setTexture:previous->depth atIndex:6];
         [encoder setBytes:&camera length:sizeof(camera) atIndex:0];
         fgDispatch(encoder,fg.flowPSO,slot->flow.width,slot->flow.height);
         [encoder memoryBarrierWithScope:MTLBarrierScopeTextures];
@@ -456,6 +564,7 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     [encoder setTexture:slot->depth atIndex:0];[encoder setTexture:slot->flow atIndex:1];[encoder setTexture:slot->motion atIndex:2];
     [encoder setTexture:slot->luma atIndex:3];[encoder setTexture:previous->luma atIndex:4];
     [encoder setTexture:slot->mask atIndex:5];[encoder setTexture:previous->mask atIndex:6];
+    [encoder setTexture:previous->depth atIndex:7];
     [encoder setBytes:&camera length:sizeof(camera) atIndex:0];[encoder setBytes:&refine length:sizeof(refine) atIndex:1];
     fgDispatch(encoder,fg.motionPSO,fg.inputWidth,fg.inputHeight);[encoder endEncoding];
     auto effect=fg.effect;
@@ -464,7 +573,8 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     effect.depthTexture=slot->depth;effect.motionTexture=slot->motion;effect.outputTexture=slot->intermediate;
     // Keep the factory's full-region defaults. Color/UI are output-sized;
     // depth/motion are input-sized, as specified by the descriptor contract.
-    effect.motionVectorScaleX=effect.motionVectorScaleY=1;effect.depthReversed=NO;
+    effect.motionVectorScaleX=float(fg.effectWidth)/fg.inputWidth;
+    effect.motionVectorScaleY=float(fg.effectHeight)/fg.inputHeight;effect.depthReversed=NO;
     effect.deltaTime=reset?1.f/60:float(simulationDelta>.001 && simulationDelta<.1?simulationDelta:delta);effect.shouldResetHistory=reset;
     effect.jitterOffsetX=effect.jitterOffsetY=0;
     effect.nearPlane=slot->view.nearPlane;effect.farPlane=slot->view.farPlane;
@@ -479,7 +589,7 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
         fg.expansion.inputContentWidth=fg.effectWidth;fg.expansion.inputContentHeight=fg.effectHeight;
         [fg.expansion encodeToCommandBuffer:d.command];
     }
-    {
+    if(!icsm_metal_frame_fused_ui.GetBool() || fg.captureRequested) {
         encoder=[d.command computeCommandEncoder];encoder.label=@"Keep actual weapon animation on generated frame";
         [encoder setTexture:slot->generated atIndex:0];[encoder setTexture:slot->ui atIndex:1];
         [encoder setTexture:slot->mask atIndex:2];[encoder setTexture:previous->mask atIndex:3];
@@ -489,6 +599,14 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     }
     fg.lastEffectFrame=slot->frame;
     }
+    if(interpolate && icsm_metal_frame_fused_ui.GetBool()) {
+        // The old horizontal-dilation scratch is dead after mask construction.
+        // Preserve the small previous coverage plane here on the render queue,
+        // instead of retaining an entire previous slot until the second
+        // presentation finishes on the other queue. Source input stays fresh
+        // without a cross-queue read/write race or an additional ring stall.
+        fgBlit(d,previous->mask,slot->maskScratch);
+    }
     if(fg.captureRequested && encodeEffect && !reset) {fg.captureRequested=false;fgCapture(d,slot,previous);}
     slot->readyValue=++fg.eventValue;
     [d.command encodeSignalEvent:fg.ready value:slot->readyValue];
@@ -496,6 +614,10 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
     const double measuredStart=slot->inputTime,measuredCPU=(slot->time-slot->inputTime)*1000;
     const bool measuredPaused=fg.adaptivePaused;
     [d.command addCompletedHandler:^(id<MTLCommandBuffer> done){
+        {
+            std::lock_guard<std::mutex> queueLock(fg.mutex);
+            slot->gpuReadyTime=done.GPUEndTime;slot->gpuFailed=done.error!=nil;slot->gpuReady=true;fg.cv.notify_all();
+        }
         std::lock_guard<std::mutex> lock(fg.statsMutex);
         if(done.error){++fg.gpuErrors;fg.error=done.error.description;fg.fault=true;}
         else if(encodeEffect && done.GPUEndTime>done.GPUStartTime){fg.gpuTimes.push_back((done.GPUEndTime-done.GPUStartTime)*1000);while(fg.gpuTimes.size()>1200)fg.gpuTimes.pop_front();}
@@ -509,9 +631,12 @@ static bool fgPresent(Device &d,id<MTLTexture> source) {
         std::lock_guard<std::mutex> lock(fg.statsMutex);fg.renderTimes.push_back(slot->time);while(fg.renderTimes.size()>1200)fg.renderTimes.pop_front();
     }
     FGJob job;job.slot=slot;job.interpolate=interpolate;job.lowLatency=icsm_metal_frame_low_latency.GetBool();
+    job.eventPacing=icsm_metal_frame_pacing.GetBool();job.fusedUI=icsm_metal_frame_fused_ui.GetBool();
+    job.protectViewmodel=icsm_metal_frame_protect_viewmodel.GetBool();
     for(unsigned i=0;i<256;i++)for(unsigned j=0;j<4;j++)job.gamma[i][j]=d.gammaSet?d.gamma[i][j]:i/255.f;
     {
-        std::lock_guard<std::mutex> lock(fg.mutex);fg.jobs.push_back(job);++fg.awaitingReal;
+        std::lock_guard<std::mutex> lock(fg.mutex);
+        fg.jobs.push_back(job);++fg.awaitingReal;
         fg.maxAwaitingReal=std::max(fg.maxAwaitingReal,fg.awaitingReal);fg.cv.notify_all();
     }
     fg.previous=slot;fg.current.reset();return true;
@@ -523,7 +648,21 @@ static NSDictionary *fgSnapshot(bool includeRecords=false) {
     if(fg.presents.size()>1)presentedFPS=(fg.presents.size()-1)/(fg.presents.back().time-fg.presents.front().time);
     for(auto value:fg.gpuTimes)gpuMean+=value;if(!fg.gpuTimes.empty())gpuMean/=fg.gpuTimes.size();
     auto percentile=[](std::vector<double> values,double p) {if(values.empty())return 0.0;std::sort(values.begin(),values.end());return values[size_t((values.size()-1)*p)];};
-    std::vector<double> ages;for(auto &r:fg.presents)if(!r.generated)ages.push_back(r.age);
+    std::vector<double> ages,readyAges,displayAges;
+    for(auto &r:fg.presents)if(!r.generated) {
+        ages.push_back(r.age);
+        if(r.gpuReadyAge>0){readyAges.push_back(r.gpuReadyAge);displayAges.push_back(r.age-r.gpuReadyAge);}
+    }
+    std::vector<double> timestamps,intervals;
+    for(auto &r:fg.presents)timestamps.push_back(r.time);
+    std::sort(timestamps.begin(),timestamps.end());
+    NSMutableDictionary *histogram=[NSMutableDictionary dictionary];
+    for(size_t i=1;i<timestamps.size();++i) {
+        const double interval=(timestamps[i]-timestamps[i-1])*1000;
+        intervals.push_back(interval);
+        NSString *bucket=[NSString stringWithFormat:@"%ld",lround(interval*120.0/1000.0)];
+        histogram[bucket]=@([histogram[bucket] unsignedLongLongValue]+1);
+    }
     std::vector<double> gate(fg.gateWaits.begin(),fg.gateWaits.end());
     unsigned awaitingReal,maxAwaitingReal,gpuJobs;unsigned long long gateTimeouts;
     {std::lock_guard<std::mutex> queueLock(fg.mutex);awaitingReal=fg.awaitingReal;maxAwaitingReal=fg.maxAwaitingReal;gpuJobs=fg.gpuJobs;gateTimeouts=fg.gateTimeouts;}
@@ -531,14 +670,21 @@ static NSDictionary *fgSnapshot(bool includeRecords=false) {
         @"resolution":@[@(fg.width),@(fg.height)],@"motion_resolution":@[@(fg.inputWidth),@(fg.inputHeight)],@"encoded":@(fg.encoded),@"real_submitted":@(fg.rendered),
         @"interpolation_resolution":@[@(fg.effectWidth),@(fg.effectHeight)],@"compact_scene":@(fg.compact),
         @"native_scene_resolution":@[@(fg.nativeWidth),@(fg.nativeHeight)],@"interpolation_scale":@(icsm_metal_frame_scale.GetFloat()),
+        @"color_detail_scale":@(icsm_metal_frame_color_scale.GetFloat()),@"quality_motion_guard":@(icsm_metal_frame_quality.GetBool()),
         @"history_resets":@(fg.resets),@"fallbacks":@(fg.fallbacks),@"render_fps":@(renderedFPS),
         @"presented_fps":@(presentedFPS),@"generated_actually_presented":@(fg.actualGenerated),
         @"rendered_actually_presented":@(fg.actualRendered),@"not_presented":@(fg.notPresented),
-        @"generation_gpu_ms_mean":@(gpuMean),@"gpu_errors":@(fg.gpuErrors),@"error":fg.error?:@"",
+        @"generation_gpu_ms_mean":@(gpuMean),@"render_command_buffer_gpu_ms_mean":@(gpuMean),
+        @"gpu_duration_scope":@"Entire render command buffer containing MetalFX; not isolated interpolation cost",
+        @"gpu_errors":@(fg.gpuErrors),@"error":fg.error?:@"",
         @"motion":icsm_metal_frame_motion.GetBool()?@"Real world depth/camera reprojection + compact-luma image motion estimates; actual viewmodel coverage protected":@"Camera-only reprojection; actual viewmodel coverage protected",
         @"viewmodel_protected":@(icsm_metal_frame_protect_viewmodel.GetBool()),@"viewmodel_animation_fps":@(renderedFPS),
         @"low_latency":@(icsm_metal_frame_low_latency.GetBool()),
+        @"event_pacing":@(icsm_metal_frame_pacing.GetBool()),@"fused_ui_present":@(icsm_metal_frame_fused_ui.GetBool()),
+        @"display_interval_ms_p50":@(percentile(intervals,.5)),@"display_interval_ms_p95":@(percentile(intervals,.95)),
+        @"display_interval_120hz_buckets":histogram,
         @"source_frame_start_to_real_present_ms_p50":@(percentile(ages,.5)),@"source_frame_start_to_real_present_ms_p95":@(percentile(ages,.95)),
+        @"source_frame_start_to_gpu_ready_ms_p50":@(percentile(readyAges,.5)),@"gpu_ready_to_real_present_ms_p50":@(percentile(displayAges,.5)),
         @"pre_input_wait_ms_p95":@(percentile(gate,.95)),@"adaptive_paused":@(fg.adaptivePaused),
         @"awaiting_real_present":@(awaitingReal),@"max_awaiting_real_present":@(maxAwaitingReal),@"gpu_jobs":@(gpuJobs),@"pre_input_wait_timeouts":@(gateTimeouts),
         @"stale_generated_display_skipped":@(fg.staleGeneratedSkipped.load()),
@@ -549,7 +695,7 @@ static NSDictionary *fgSnapshot(bool includeRecords=false) {
     result[@"recent_hitches"]=hitches;
     if(includeRecords) {
         NSMutableArray *records=[NSMutableArray array];
-        for(auto &r:fg.presents)[records addObject:@{@"time":@(r.time),@"generated":@(r.generated),@"source_frame":@(r.frame),@"source_age_ms":@(r.age)}];
+        for(auto &r:fg.presents)[records addObject:@{@"time":@(r.time),@"generated":@(r.generated),@"source_frame":@(r.frame),@"source_age_ms":@(r.age),@"gpu_ready_age_ms":@(r.gpuReadyAge)}];
         result[@"presentations"]=records;
         NSMutableArray *times=[NSMutableArray array];for(double time:fg.renderTimes)[times addObject:@(time)];result[@"render_times"]=times;
     }
@@ -590,9 +736,17 @@ CON_COMMAND(icsm_metal_frame_interpolation_reset_stats,"Reset actual rendered/ge
     s.gateWaits.clear();
 }
 CON_COMMAND(icsm_metal_frame_interpolation_report,"Save measured render and actual display timestamps under Documents/I5") {
-    auto report=SourceMetal::fgSnapshot(true);
+    NSMutableDictionary *report=[SourceMetal::fgSnapshot(true) mutableCopy];
+    NSString *tag=@"gameplay";
+    if(args.ArgC()>1) {
+        NSString *candidate=[NSString stringWithUTF8String:args[1]];
+        NSCharacterSet *valid=[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"];
+        if(candidate.length && candidate.length<96 && [candidate rangeOfCharacterFromSet:valid.invertedSet].location==NSNotFound)tag=candidate;
+    }
+    report[@"tag"]=tag;report[@"timestamp"]=@([[NSDate date] timeIntervalSince1970]);
     auto data=[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];
-    [data writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/I5/frame-interpolation-gameplay.json"] atomically:YES];
+    NSString *relative=[NSString stringWithFormat:@"Documents/I5/frame-interpolation-%@.json",tag];
+    [data writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:relative] atomically:YES];
     Msg("ICSM_FRAME_GENERATION render=%.2f display=%.2f real=%llu generated=%llu errors=%llu\n",
         [report[@"render_fps"] doubleValue],[report[@"presented_fps"] doubleValue],
         [report[@"rendered_actually_presented"] unsignedLongLongValue],

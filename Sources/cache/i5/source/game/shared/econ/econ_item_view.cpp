@@ -835,6 +835,8 @@ void CEconItemView::Invalidate( void )
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
+#include "attribute_lookup_ios.inc"
+
 void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterator ) const
 {
 	Assert( pIterator );
@@ -873,13 +875,21 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 		{
 			Assert( m_pEconItemView );
 			Assert( m_pIterator );
+            // Built from the live local list on each iteration: no stale cache,
+            // entity layout changes, schema ownership or mutation hooks.
+            m_fast = ICSMFastAttributeLookup();
+            m_localAttributeMask[0] = m_localAttributeMask[1] = 0;
+            for (int n=0; n<pEconItemView->GetNumAttributes(); ++n) {
+                unsigned id=pEconItemView->GetAttribute(n)->GetAttribIndex();
+                m_localAttributeMask[(id >> 6) & 1] |= uint64(1) << (id & 63);
+            }
 		}
 
 		virtual bool OnIterateAttributeValue( const CEconItemAttributeDefinition *pAttrDef, attrib_value_t value )
 		{
 			Assert( pAttrDef );
 
-			return m_pEconItemView->GetAttributeByDefIndex( pAttrDef->GetDefinitionIndex() )
+			return HasLocalAttribute( pAttrDef->GetDefinitionIndex() )
 				 ? true
 				 : m_pIterator->OnIterateAttributeValue( pAttrDef, value );
 		}
@@ -888,7 +898,7 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 		{
 			Assert( pAttrDef );
 
-			return m_pEconItemView->GetAttributeByDefIndex( pAttrDef->GetDefinitionIndex() )
+			return HasLocalAttribute( pAttrDef->GetDefinitionIndex() )
 				? true
 				: m_pIterator->OnIterateAttributeValue( pAttrDef, value );
 		}
@@ -897,7 +907,7 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 		{
 			Assert( pAttrDef );
 
-			return m_pEconItemView->GetAttributeByDefIndex( pAttrDef->GetDefinitionIndex() )
+			return HasLocalAttribute( pAttrDef->GetDefinitionIndex() )
 				 ? true
 				 : m_pIterator->OnIterateAttributeValue( pAttrDef, value );
 		}
@@ -906,12 +916,21 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 		{
 			Assert( pAttrDef );
 
-			return m_pEconItemView->GetAttributeByDefIndex( pAttrDef->GetDefinitionIndex() )
+			return HasLocalAttribute( pAttrDef->GetDefinitionIndex() )
 				? true
 				: m_pIterator->OnIterateAttributeValue( pAttrDef, value );
 		}
 
 	private:
+        bool HasLocalAttribute(unsigned id) const {
+            if (m_fast && !(m_localAttributeMask[(id >> 6) & 1] & (uint64(1) << (id & 63))))
+                return false;
+            // Collisions only take the original exact lookup; never suppress
+            // a different attribute that shares the same filter bit.
+            return m_pEconItemView->GetAttributeByDefIndex(id) != NULL;
+        }
+        uint64 m_localAttributeMask[2];
+        bool m_fast;
 		const CEconItemView *m_pEconItemView;
 		IEconItemAttributeIterator *m_pIterator;
 	};
@@ -925,7 +944,7 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 		GetSOCData()->IterateAttributes( &iteratorWrapper );
 	}
 #ifdef ECON_NETWORK_DYNAMIC_ATTRIBUTES_FOR_DEMOS
-	else if ( GetItemID() > 0 )
+	else if ( GetItemID() > 0 || m_NetworkedDynamicAttributesForDemos.GetNumAttributes() > 0 )
 	{
 		// Since there's no persistent data available, try the networked values!
 		for ( int i = 0; i < m_NetworkedDynamicAttributesForDemos.GetNumAttributes(); i++ )
@@ -943,7 +962,7 @@ void CEconItemView::IterateAttributes( class IEconItemAttributeIterator *pIterat
 			attribute_data_union_t value;
 			value.asFloat = pAttrInst->GetValue();
 
-			if ( !pAttrType->OnIterateAttributeValue( pIterator, pAttrDef, value ) )
+			if ( !pAttrType->OnIterateAttributeValue( GetItemID()==0 ? &iteratorWrapper : pIterator, pAttrDef, value ) )
 				return;
 		}
 
@@ -2554,6 +2573,8 @@ void CEconItemView::CreateCustomWeaponMaterials( CSWeaponID nWeaponId, bool bIgn
 ConVar econ_enable_inventory_images( "econ_enable_inventory_images", "1", FCVAR_CLIENTDLL | FCVAR_DEVELOPMENTONLY, "allow inventory image rendering for use by scaleform" );
 ConVar econ_inventory_image_pinboard( "econ_inventory_image_pinboard", "0", FCVAR_CLIENTDLL | FCVAR_DEVELOPMENTONLY );
 
+#include "offline_sticker_preview_model.inc"
+
 bool CEconItemView::Update( void )
 {
 	if ( !econ_enable_inventory_images.GetBool() || g_pRenderToRTHelper == NULL )
@@ -2592,6 +2613,7 @@ bool CEconItemView::Update( void )
 		
 		m_pRenderToRTMDL = new CMergedMDL;
 		m_pRenderToRTMDL->SetMDL( GetIconDisplayModel(), this );
+        ICSMAddInventoryStickers(this,m_pRenderToRTMDL);
 
 		m_pRenderToRTData = g_pRenderToRTHelper->CreateRenderToRTData( m_pRenderToRTMDL, m_pScratchVTF );
 
@@ -3025,6 +3047,7 @@ void CEconItemView::FinishLoadCachedInventoryImage( void* pData, int numReadByte
 
 bool CEconItemView::LoadCachedInventoryImage( void )
 {
+    if(GetItemID()==0 && ItemHasAnyStickersApplied())return false;
 	if ( !m_vecImageReadyCallbacks.Count() )
 		return false;
 
@@ -3065,6 +3088,7 @@ bool CEconItemView::LoadCachedInventoryImage( void )
 
 void CEconItemView::SaveInventoryImage( CUtlBuffer &rawImageRgba )
 {
+    if(GetItemID()==0 && ItemHasAnyStickersApplied())return;
 	GenerateCachedInventoryImageName();
 
 	CUtlBuffer *pBuffer = new CUtlBuffer();
@@ -3183,7 +3207,15 @@ void CEconItemView::InitNetworkedDynamicAttributesForDemos( void )
 {
 #if defined( ECON_NETWORK_DYNAMIC_ATTRIBUTES_FOR_DEMOS )
 	if ( !GetSOCData() )
-		return;
+    {
+        // Offline items have no SOCache. Reuse the existing raw-bit attribute
+        // send table; adding a new network field would break server compatibility.
+        if (GetItemID() == 0) {
+            m_NetworkedDynamicAttributesForDemos.CopyFrom(static_cast<const CAttributeList&>(m_AttributeList));
+            NetworkStateChanged();
+        }
+        return;
+    }
 
 	m_NetworkedDynamicAttributesForDemos.DestroyAllAttributes();
 
@@ -4409,12 +4441,13 @@ const CEconItemAttribute *CAttributeList::GetAttributeByClass( const char *szAtt
 //-----------------------------------------------------------------------------
 CEconItemAttribute *CAttributeList::GetAttributeByDefIndex( uint16 unAttrDefIndex )
 {
+	const bool fast = ICSMFastAttributeLookup();
 	int iAttributes = GetNumAttributes();
 	for ( int i = 0; i < iAttributes; i++ )
 	{
 		CEconItemAttribute *pAttr = GetAttribute( i );
 		Assert( pAttr && pAttr->GetStaticData() );
-		if ( pAttr && pAttr->GetStaticData() && pAttr->GetStaticData()->GetDefinitionIndex() == unAttrDefIndex )
+		if ( pAttr && (fast ? pAttr->GetAttribIndex() == unAttrDefIndex && pAttr->GetStaticData() : pAttr->GetStaticData() && pAttr->GetStaticData()->GetDefinitionIndex() == unAttrDefIndex) )
 			return pAttr;
 	}
 
@@ -4423,12 +4456,13 @@ CEconItemAttribute *CAttributeList::GetAttributeByDefIndex( uint16 unAttrDefInde
 
 const CEconItemAttribute *CAttributeList::GetAttributeByDefIndex( uint16 unAttrDefIndex ) const
 {
+	const bool fast = ICSMFastAttributeLookup();
 	int iAttributes = GetNumAttributes();
 	for ( int i = 0; i < iAttributes; i++ )
 	{
 		const CEconItemAttribute *pAttr = GetAttribute( i );
 		Assert( pAttr && pAttr->GetStaticData() );
-		if ( pAttr && pAttr->GetStaticData() && pAttr->GetStaticData()->GetDefinitionIndex() == unAttrDefIndex )
+		if ( pAttr && (fast ? pAttr->GetAttribIndex() == unAttrDefIndex && pAttr->GetStaticData() : pAttr->GetStaticData() && pAttr->GetStaticData()->GetDefinitionIndex() == unAttrDefIndex) )
 			return pAttr;
 	}
 

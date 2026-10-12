@@ -4,7 +4,7 @@
 // Count only foreground display time. Lifecycle notifications account for
 // the last active interval before pausing; a background wait never skips it.
 struct ICSMAnnouncementClock {
-    static constexpr double requiredSeconds = 20.0;
+    static constexpr double requiredSeconds = 10.0;
     double elapsed = 0, last = 0;
     bool started = false, active = false;
     void begin(double now, bool foreground) {

@@ -1,0 +1,359 @@
+//-----------------------------------------------------------------------------
+//	PANORAMA_CLIENT.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR				".."
+
+$Macro GENERATED_PROTO_DIR	"generated_proto_panorama_client"
+
+$Include "$SRCDIR\vpc_scripts\source_lib_base.vpc"
+$include "$SRCDIR\vpc_scripts\protobuf_builder.vpc"
+//APS $Include "$SRCDIR\vpc_scripts\steam_lib_base.vpc"
+//APS $Include "$SRCDIR\tier1\tier1_include.vpc"
+
+$Macro PANORAMA_USE_S1WRAPPER "1"
+
+
+$Configuration "Debug"
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$IntermediateDirectory						".\panorama_client\Debug\$PLATFORM"
+	}
+
+}
+
+
+$Configuration "Release"
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$IntermediateDirectory						".\panorama_client\Release\$PLATFORM"
+	}
+
+}
+
+
+$Configuration
+{
+	$General
+	{
+		// Steam wants dependencies setup for runtime rather than the bare minimum dependencies for build time. 
+		$AdditionalProjectDependencies			"$BASE;chromemessages;mathlib;steammessages;panorama"	[$WINDOWS]
+//APS	$OutputDirectory						"$SRCDIR\lib\$PLATFORM\$CONFIGURATION"
+	}
+
+	$Compiler
+	{
+		$PreprocessorDefinitions				"$BASE;_CLIENT;PANORAMA_CLIENT_EXPORTS;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA"
+		$PreprocessorDefinitions				"$BASE;NOAUDIO" [$NOAUDIO]
+		$PreprocessorDefinitions				"$BASE;UBUNTU" [$UBUNTU]
+		$PreprocessorDefinitions				"$BASE;PANORAMA_USE_S1WRAPPER"
+
+
+		$AdditionalIncludeDirectories			"steamextra\common;steamextra\public;.;$BASE"
+		$AdditionalIncludeDirectories			"..\panorama_s1wrapper;$BASE"
+		$AdditionalIncludeDirectories			"$BASE;$GENERATED_PROTO_DIR"
+		$AdditionalIncludeDirectories			"$BASE;..\public\panorama"
+		$AdditionalIncludeDirectories			"$BASE;..\public"
+		$AdditionalIncludeDirectories			"$BASE;..\public\tier1"
+		$AdditionalIncludeDirectories			"$BASE;..\public\vstdlib"
+		$AdditionalIncludeDirectories			"$BASE;..\common"
+		$AdditionalIncludeDirectories			"$BASE;..\public\steam"
+//APS	$AdditionalIncludeDirectories			"$BASE;..\include\$PLATFORM"
+//APS	$AdditionalIncludeDirectories			"$BASE;..\include"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty"
+		$AdditionalIncludeDirectories			"$BASE;..\common\steamui"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\zlib"
+		$AdditionalIncludeDirectories			"$BASE;..\thirdparty\sdl\include"
+
+		$Create/UsePrecompiledHeader			"Use Precompiled Header (/Yu)"
+		$Create/UsePCHThroughFile				"stdafx_client.h"
+
+		$EnableC++Exceptions					"No"
+
+		// necessary to force including debug information from stdafx.obj
+		$AdditionalOptions						"$BASE /YlCUIEngine"
+
+		$DisableSpecificWarnings	"$BASE;4189"   [$WIN32]
+
+	}
+
+	$Librarian
+	{
+//APS	$OutputFile								"$SRCDIR\lib\$PLATFORM\$CONFIGURATION\panorama_client$_STATICLIB_EXT"
+	}
+}
+
+$Project "panorama_client"
+{
+	$Folder "Public"
+	{
+		$File "$SRCDIR\public\panorama\panorama.h"
+		$File "$SRCDIR\public\panorama\panoramasymbol.h"
+		$File "$SRCDIR\public\panorama\panoramatypes.h"
+		$File "$SRCDIR\public\panorama\panoramacxx.h"
+		$File "$SRCDIR\public\panorama\iuiengine.h"
+		$File "$SRCDIR\public\panorama\iuilayoutmanager.h"
+		$File "$SRCDIR\public\panorama\localization\ilocalize.h"
+		$File "$SRCDIR\public\panorama\iuipanel.h"
+		$File "$SRCDIR\public\panorama\iuipanelclient.h"
+		$File "$SRCDIR\public\panorama\iuipanelstyle.h"
+		$File "$SRCDIR\public\panorama\iuirenderengine.h"
+		$File "$SRCDIR\public\panorama\iuistylefactory.h"
+		$File "$SRCDIR\public\panorama\iuiwindow.h"
+		$File "$SRCDIR\public\panorama\transformations.h"
+		$File "$SRCDIR\public\panorama\uievent.h"
+		$File "$SRCDIR\public\panorama\uievents.h"
+		$File "$SRCDIR\public\panorama\uijsregistration.h"
+		$File "$SRCDIR\public\panorama\uimetaprogramming.h"
+		$File "$SRCDIR\public\panorama\uischeduleddel.h"
+		$File "$SRCDIR\public\panorama\uitoplevelwindow.h"
+		$File "$SRCDIR\public\panorama\uitoplevelwindowoverlay.h"
+		$File "$SRCDIR\public\panorama\uiwebapiclient.h"
+		$File "$SRCDIR\public\panorama\uifileresource.h"
+		$File "$SRCDIR\public\panorama\uisettings.h"
+
+		$Folder "Layout"
+		{
+			$File "$SRCDIR\public\panorama\layout\csshelpers.h"
+			$File "$SRCDIR\public\panorama\layout\backgroundimage.h"
+			$File "$SRCDIR\public\panorama\layout\panel2dfactory.h"
+			$File "$SRCDIR\public\panorama\layout\uilength.h"
+			$File "$SRCDIR\public\panorama\layout\fillbrush.h"
+			$File "$SRCDIR\public\panorama\layout\stylefiletypes.h"
+			$File "$SRCDIR\public\panorama\layout\stylesymbol.h"
+		}
+		
+		$Folder "Renderer"
+		{
+			$File "$SRCDIR\public\panorama\renderer\styleproperties.h"
+		}
+
+		$Folder "Text"
+		{
+			$File "$SRCDIR\public\panorama\text\iuitextlayout.h"
+		}
+
+		$Folder "Controls"
+		{
+			$File "$SRCDIR\public\panorama\controls\animatedimagestrip.h"
+			$File "$SRCDIR\public\panorama\controls\button.h"
+			$File "$SRCDIR\public\panorama\controls\carousel.h"
+			$File "$SRCDIR\public\panorama\controls\carouselnav.h"
+			$File "$SRCDIR\public\panorama\controls\circularprogressbar.h"
+			$File "$SRCDIR\public\panorama\controls\contextmenu.h"
+			$File "$SRCDIR\public\panorama\controls\countdown.h"
+			$File "$SRCDIR\public\panorama\controls\delayloadlist.h"
+			$File "$SRCDIR\public\panorama\controls\delayloadpanel.h"
+			$File "$SRCDIR\public\panorama\controls\dragzoom.h"
+			$File "$SRCDIR\public\panorama\controls\dropdown.h"
+			$File "$SRCDIR\public\panorama\controls\edgescroller.h"
+			$File "$SRCDIR\public\panorama\controls\fileopendialog.h"
+			$File "$SRCDIR\public\panorama\controls\frame.h"
+			$File "$SRCDIR\public\panorama\controls\grid.h"
+			$File "$SRCDIR\public\panorama\controls\html.h"
+			$File "$SRCDIR\public\panorama\controls\image.h"
+			$File "$SRCDIR\public\panorama\controls\label.h"
+			$File "$SRCDIR\public\panorama\controls\mousescroll.h"
+			$File "$SRCDIR\public\panorama\controls\movieplayer.h"
+			$File "$SRCDIR\public\panorama\controls\numberentry.h"
+			$File "$SRCDIR\public\panorama\controls\panel2d.h"
+			$File "$SRCDIR\public\panorama\controls\panelhandle.h"
+			$File "$SRCDIR\public\panorama\controls\panelptr.h"
+			$File "$SRCDIR\public\panorama\controls\progressbar.h"
+			$File "$SRCDIR\public\panorama\controls\scrollbar.h"
+			$File "$SRCDIR\public\panorama\controls\scrollforwarding.h"
+			$File "$SRCDIR\public\panorama\controls\slider.h"
+			$File "$SRCDIR\public\panorama\controls\slideshow.h"
+			$File "$SRCDIR\public\panorama\controls\textentry.h"
+			$File "$SRCDIR\public\panorama\controls\tooltip.h"
+			$File "$SRCDIR\public\panorama\controls\verticalscrolllist.h"
+			$File "$SRCDIR\public\panorama\controls\vumeter.h"
+
+			$File "$SRCDIR\public\panorama\controls\source2\renderpanel.h"
+		}
+
+		$Folder "TextInput"
+		{
+			$File "$SRCDIR/public/panorama/textinput/textinput.h"
+			$File "$SRCDIR/public/panorama/textinput/textinput_daisywheel.h"
+			$File "$SRCDIR/public/panorama/textinput/textinput_fullscreen.h"
+			$File "$SRCDIR/public/panorama/textinput/textinput_settings.h"
+		}
+
+		$Folder "Input"
+		{
+			$File "$SRCDIR\public\panorama\input\iuiinput.h"
+			$File "$SRCDIR\public\panorama\input\keycodes.h"
+			$File "$SRCDIR\public\panorama\input\mousecodes.h"
+			$File "$SRCDIR\public\panorama\input\mousecursors.h"
+			$File "$SRCDIR\public\panorama\input\gamepadcodes.h"
+		}
+
+		$File "$SRCDIR\panorama\uiengineclient.cpp"
+	}
+
+	$Folder "Controls"
+	{
+		$Folder "Debug"
+		{
+			$File ".\controls\debug\debugger.h"
+			$File ".\controls\debug\debugger.cpp"
+			$File ".\controls\debug\debugautocomplete.h"
+			$File ".\controls\debug\debugautocomplete.cpp"
+			$File ".\controls\debug\debuglayout.h"
+			$File ".\controls\debug\debuglayout.cpp"
+			$File ".\controls\debug\debugpanel.h"
+			$File ".\controls\debug\debugpanel.cpp"
+			$File ".\controls\debug\debugpanelstyle.h"
+			$File ".\controls\debug\debugpanelstyle.cpp"
+			$File ".\controls\debug\debugpanelparents.h"
+			$File ".\controls\debug\debugpanelparents.cpp"
+//APS		$File ".\controls\debug\console.h"
+//APS		$File ".\controls\debug\console.cpp"
+		}
+
+		$File ".\controls\panel2d.cpp"
+		$File ".\controls\animatedimagestrip.cpp"
+		$File ".\controls\button.cpp"
+		$File ".\controls\carousel.cpp"
+		$File ".\controls\carouselnav.cpp"
+		$File ".\controls\carouselnavbutton.cpp"
+		$File ".\controls\circularprogressbar.cpp"
+		$File ".\controls\contextui.h"
+		$File ".\controls\contextui.cpp"
+		$File ".\controls\countdown.cpp"
+		$File ".\controls\contextmenu.cpp"
+		$File ".\controls\delayloadlist.cpp"
+		$File ".\controls\delayloadpanel.cpp"
+		$File ".\controls\dragzoom.cpp"
+		$File ".\controls\dropdown.cpp"
+		$File ".\controls\edgescroller.cpp"
+		$File ".\controls\fileopendialog.cpp"
+		$File ".\controls\frame.cpp"
+		$File ".\controls\grid.cpp"
+		$File ".\controls\html.cpp"
+		$File ".\controls\image.cpp"
+		$File ".\controls\label.cpp"
+		$File ".\controls\mousescroll.cpp"
+		$File ".\controls\movieplayer.cpp"
+		$File ".\controls\numberentry.cpp"
+		$File ".\controls\progressbar.cpp"
+		$File ".\controls\scrollbar.cpp"
+		$File ".\controls\scrollforwarding.cpp"
+		$File ".\controls\slider.cpp"
+		$File ".\controls\slideshow.cpp"
+		$File ".\controls\textentry.cpp"
+		$File ".\controls\tooltip.cpp"
+		$File ".\controls\verticalscrolllist.cpp"
+		$File ".\controls\vumeter.cpp"
+
+		$File ".\controls\source2\renderpanel.cpp"
+	}
+
+	$Folder "TextInput"
+	{
+		$File "./textinput/textinput.cpp"
+		$File "./textinput/textinput_daisywheel.cpp"
+		$File "./textinput/textinput_fullscreen.cpp"
+		$File "./textinput/textinput_settings.cpp"
+		$File "./textinput/textinput_suggest.cpp"
+		$File "./textinput/textinput_suggest.h"
+		$File "./textinput/utlradixtrie.h"
+	}
+	
+	$Folder "FrameworkShared"
+	{
+		$File "$SRCDIR\common\svg\svghelpers.h"
+		$File ".\layout\backgroundimage.cpp" \
+			".\layout\csshelpers.cpp" \
+			".\layout\fillbrush.cpp" \
+			".\layout\panel2dfactory.cpp" \
+			".\panoramasymbol.cpp" \
+			".\data\panoramavideoplayer.cpp" \
+			"$SRCDIR\common\svg\svghelpers.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader    "Not Using Precompiled Headers"
+				}
+			}
+		}
+
+		$File ".\layout\stylepropertyfactory.h"
+		$File ".\layout\stylepropertyfactory.cpp" \
+			".\renderer\styleproperties.cpp" \
+			".\uifileresource.cpp" \
+			".\layout\uilength.cpp" \
+			".\uievent.cpp" \
+			".\uievents.cpp" \
+			".\uischeduleddel.cpp" \
+			".\transformations.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader    "Not Using Precompiled Headers"
+				}
+			}
+		}
+	}
+
+	$Folder "Source 2"
+	{
+		$File "$SRCDIR\public\zip_utils.cpp"
+		{
+			$Configuration
+			{
+				$Compiler [$WINDOWS]
+				{
+					$Create/UsePrecompiledHeader			"Not Using Precompiled Headers"
+				}
+			}
+		}
+	}
+
+	$File ".\stdafx_client.h"
+	$File ".\stdafx_client.cpp"
+	{
+		$Configuration 
+		{
+			$Compiler [$WINDOWS]
+			{
+				$Create/UsePrecompiledHeader			"Create Precompiled Header (/Yc)"
+			}
+		}
+	}
+
+	$file "$SRCDIR\panorama_s1wrapper\wrap_misc.cpp"
+	{
+		$Configuration
+		{
+			$Compiler 
+			{
+				$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+			}
+		}
+	}
+	$file "$SRCDIR\panorama_s1wrapper\utlstringbuilder.cpp"
+	{
+		$Configuration
+		{
+			$Compiler 
+			{
+				$Create/UsePrecompiledHeader	"Not Using Precompiled Headers" [$WINDOWS]
+			}
+		}
+	}
+
+}
+
+

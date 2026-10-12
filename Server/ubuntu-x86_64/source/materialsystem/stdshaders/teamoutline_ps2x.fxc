@@ -1,0 +1,56 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+sampler TexSampler : register( s0 );
+
+const float4 g_Const0 : register( c0 );
+
+#define g_TintColor g_Const0.rgb
+#define g_Width g_Const0.a
+
+struct PS_INPUT
+{
+	float2 baseTexCoord				: TEXCOORD0;		// Base texture coordinate
+};
+
+float4 main( PS_INPUT i ) : COLOR
+{
+	float2 vUV = i.baseTexCoord;
+	float2 offsets[5] = {
+		float2( 2, 1 ),
+		float2( 1, -2 ),
+		float2( -2, -1 ),
+		float2( -1, 2 ),
+		float2( 0, 0 )
+	};
+	
+	float flDistToScreenCenter = length( i.baseTexCoord - float2(0.5f,0.5f) );
+	
+	float flSampleScale = lerp( g_Width, 0, flDistToScreenCenter );
+	
+	float flHit = 0;
+	float3 cCol = 0;
+	
+	float3 cSample;
+	
+	int k;
+	for ( k = 0; k < 5; k++ )
+	{
+		cSample = tex2D( TexSampler, vUV + offsets[k] * flSampleScale ).rgb;
+		cCol.rgb += cSample.rgb;
+		
+		flHit += step( cSample.r + cSample.g + cSample.b, 0 );
+	}
+	
+	flHit *= (1.0/5.0);
+	cCol *= (1.0/5.0);
+	
+	float flEdge = 1.0 - ( abs( flHit - 0.5 ) * 2.0 );
+	clip(flEdge-0.001);
+	flEdge *= 4.0;
+	
+	float flScreenEdgeMask = smoothstep( -0.2f, 0.4f, 0.6f - flDistToScreenCenter );
+	
+	return float4( cCol * flEdge * g_TintColor * flScreenEdgeMask, 1 );
+}

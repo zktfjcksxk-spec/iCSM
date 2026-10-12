@@ -1,0 +1,14 @@
+//-----------------------------------------------------------------------------
+//	panorama_include_base.vpc
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+	$Folder "panorama"
+	{
+		$Folder "Header Files"
+		{
+			$File "$SRCDIR\public\panorama\uievents.h"
+		}
+	}
+

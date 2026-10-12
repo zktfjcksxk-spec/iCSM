@@ -61,6 +61,12 @@ var SettingsMenuShared = ( function () {
 		_ResetControls();
 	};
 
+    var _ResetControllerDefaults = function ()
+    {
+        GameInterfaceAPI.ConsoleCommand("icsm_controller_reset");
+        $.Schedule(0.25, function () { _RefreshControlsRecursive(_FindSettingsTab("ControllerSettings")); });
+    };
+
 	var _ResetAudioSettings = function( )
 	{
 		// Remaining audio controls reset their own ConVars.
@@ -251,6 +257,7 @@ var SettingsMenuShared = ( function () {
 		ResetControlsRecursivepanel	    : _ResetControlsRecursive,
 		ResetControls	                : _ResetControls,
 		ResetKeybdMouseDefaults	        : _ResetKeybdMouseDefaults,
+        ResetControllerDefaults         : _ResetControllerDefaults,
 		ResetAudioSettings	            : _ResetAudioSettings,
 		ResetVideoSettings	            : _ResetVideoSettings,
 		ScrollToId                      : _ScrollToId,

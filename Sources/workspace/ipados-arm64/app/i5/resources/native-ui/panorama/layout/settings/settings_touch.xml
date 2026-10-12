@@ -5,14 +5,48 @@
         <include src="file://{resources}/styles/mainmenu.css" />
         <include src="file://{resources}/styles/settings/settings_mobile.css" />
     </styles>
+    <scripts><include src="file://{resources}/scripts/settingsmenu_shared.js" /></scripts>
     <Panel useglobalcontext="true" class="SettingsMenuTab ICSMMobileSettings">
         <Panel id="ICSMSettingsScrollViewport" class="SettingsMenuTabContent vscroll">
+            <Panel class="SettingsBackground" style="flow-children: down;">
+                <Panel class="SettingsSectionTitleContianer">
+                    <Label class="SettingsSectionTitleLabel" text="触屏按钮显示" />
+                </Panel>
+                <Panel class="SettingsMenuDropdownContainer">
+                    <Label text="隐藏所有触屏按钮" class="half-width" />
+                    <CSGOSettingsEnumDropDown id="ICSMTouchHideButtons" class="PopupButton White" convar="icsm_touch_hide_buttons" onuserinputsubmit="GameInterfaceAPI.ConsoleCommand(&quot;host_writeconfig&quot;);">
+                        <Label text="关闭" value="0" id="icsmtouchbuttonsshow" />
+                        <Label text="开启" value="1" id="icsmtouchbuttonshide" />
+                    </CSGOSettingsEnumDropDown>
+                </Panel>
+                <Label class="ICSMVideoPresetNote" text="使用键盘或控制器时可隐藏对局中的全部触屏按钮。左右半屏划动和菜单触控仍然可用；关闭后恢复原有按键布局。" />
+            </Panel>
+            <Panel id="ICSMTouchAimSettings" class="SettingsBackground" style="flow-children: down;">
+                <Panel class="SettingsSectionTitleContianer">
+                    <Label class="SettingsSectionTitleLabel" text="触摸视角与灵敏度" />
+                </Panel>
+                <Panel class="SettingsMenuDropdownContainer">
+                    <Label text="划屏转向模式" class="half-width" />
+                    <CSGOSettingsEnumDropDown id="ICSMTouchAimMode" class="PopupButton White" convar="icsm_touch_aim_mode" onuserinputsubmit="GameInterfaceAPI.ConsoleCommand(&quot;host_writeconfig&quot;);">
+                        <Label text="固定速度（无加速度）" value="0" id="icsmtouchaimfixed" />
+                        <Label text="速度加速" value="1" id="icsmtouchaimvelocity" />
+                    </CSGOSettingsEnumDropDown>
+                </Panel>
+                <Label class="ICSMVideoPresetNote" text="固定速度保持一致的转向手感；速度加速随手指划动速度平滑提升，最高为固定速度的 2 倍。" />
+                <Panel class="horizontal-separator" />
+                <CSGOSettingsSlider id="ICSMTouchSensitivity" text="总划屏灵敏度（倍率）" min="0.1" max="3" percentage="false" displayprecision="2" constrainrange="true" convar="icsm_touch_sensitivity" onuserinputsubmit="GameInterfaceAPI.ConsoleCommand(&quot;host_writeconfig&quot;);" />
+                <Panel class="horizontal-separator" />
+                <CSGOSettingsSlider id="ICSMTouchRifleScopeSensitivity" text="AUG／SG 553 开镜灵敏度（倍率）" min="0.1" max="3" percentage="false" displayprecision="2" constrainrange="true" convar="icsm_touch_rifle_scope_sensitivity" onuserinputsubmit="GameInterfaceAPI.ConsoleCommand(&quot;host_writeconfig&quot;);" />
+                <Panel class="horizontal-separator" />
+                <CSGOSettingsSlider id="ICSMTouchSniperScopeSensitivity" text="狙击镜灵敏度（倍率）" min="0.1" max="3" percentage="false" displayprecision="2" constrainrange="true" convar="icsm_touch_sniper_scope_sensitivity" onuserinputsubmit="GameInterfaceAPI.ConsoleCommand(&quot;host_writeconfig&quot;);" />
+                <Label class="ICSMVideoPresetNote" text="1.00 为当前默认手感，范围 0.10～3.00。两组开镜灵敏度是总灵敏度的倍率；开火时沿用对应设置，不额外改变灵敏度。" />
+            </Panel>
             <Panel class="SettingsBackground" style="flow-children: down;">
                 <Panel class="SettingsSectionTitleContianer">
                     <Label class="SettingsSectionTitleLabel" text="触摸屏键位调整" />
                 </Panel>
                 <Label text="拖动按键调整位置，使用大小滑杆调整尺寸。点击保存后，布局会在下次启动时保留。" style="font-size: 22px; color: white; margin-bottom: 24px;" />
-                <Label text="整个右半屏的空白区域均可滑动转动视角。按键触摸不会转动视角，灵敏度保持恒定。" style="font-size: 22px; color: white; margin-bottom: 24px;" />
+                <Label text="整个右半屏的空白区域均可滑动转动视角。按键触摸不会转动视角。" style="font-size: 22px; color: white; margin-bottom: 24px;" />
                 <Button class="PopupButton White" onactivate="GameInterfaceAPI.ConsoleCommand(&quot;i5_touch_layout&quot;);" style="width: 250px;">
                     <Label text="调整按键" />
                 </Button>

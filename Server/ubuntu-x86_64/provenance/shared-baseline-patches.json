@@ -1,0 +1,892 @@
+{
+  "files": [
+    {
+      "path": "appframework/sdlmgr.cpp",
+      "sha256": "54910db3e505d6c10394cddb8aa74dcadd9db884e724c64e57f79e15833964da"
+    },
+    {
+      "path": "bitmap/colorconversion.cpp",
+      "sha256": "7af37d431df6b08ac5ad997740d8e906a817c4cecce6ad5b5570f580b5277269"
+    },
+    {
+      "path": "bitmap/imageformat.cpp",
+      "sha256": "f416a91080dcf98387340c830743b25ba73861f9aa53b8b3e7d5c2a9583425bf"
+    },
+    {
+      "path": "bitmap/resample.cpp",
+      "sha256": "2fabb03b774d84ecc1aa08b1e005142af29991799e4609ebfa7abcbc03998ed5"
+    },
+    {
+      "path": "bitmap/tgawriter.cpp",
+      "sha256": "b64506846fafa4311aed10f5697e60a92eb22a14784dfa7287f41a8dd0936586"
+    },
+    {
+      "path": "common/GameUI/ObjectList.cpp",
+      "sha256": "fc14fd3b1947041c9ca9b138fab7289440bae6c427fdce1a0f41e7ad27dd09dc"
+    },
+    {
+      "path": "common/imageutils.cpp",
+      "sha256": "60ed2105f9fe82651707d5b044cfcec16a0bdd94c41c52a61ea27bfd2be3fa75"
+    },
+    {
+      "path": "common/pngloader.cpp",
+      "sha256": "e335d91eabd6337b56fb00f668559ea121ad1e40c3eb01c594f03106deb1a042"
+    },
+    {
+      "path": "datacache/datacache.cpp",
+      "sha256": "6b8b5b0597f437cbfabd7f0ce572766485fb3a42bf58ab25a60d2fe0fbf0fadb"
+    },
+    {
+      "path": "dedicated/filesystem.cpp",
+      "sha256": "76048503fefc6186a352cf1dc4b4474f09c33810a6e0cdb3ad0337fc3cbf290d"
+    },
+    {
+      "path": "dedicated/sys_ded.cpp",
+      "sha256": "e7afdda3e05bfbe003726c1db30942ba4800b93b36def0288166507d57235b6e"
+    },
+    {
+      "path": "dedicated/sys_linux.cpp",
+      "sha256": "9ab1a077769dc4c90320e6fa7c758407ebe4aec5448ea7ec06d46c5ea324325e"
+    },
+    {
+      "path": "dedicated_main/main.cpp",
+      "sha256": "b436c2e2ee705b4bd3f3f87b0d3d63cbd600a7d18de46df78e25421f6a5d90c2"
+    },
+    {
+      "path": "engine/audio/private/snd_dma.cpp",
+      "sha256": "257c17cc822944bf7ed8b751a713586a85d05f175e735965c489d4c38e8c3ed6"
+    },
+    {
+      "path": "engine/audio/private/snd_mix.cpp",
+      "sha256": "4489bca82238bb73af7b75fa170e1502a5468a997a9bb6e8f3a689b709990b36"
+    },
+    {
+      "path": "engine/audio/private/snd_wave_data.cpp",
+      "sha256": "b94e90925bd5052026de16229e2bd6451e3735637dd8a07e3e8519e28e9ba216"
+    },
+    {
+      "path": "engine/audio/private/voice_sound_engine_interface.cpp",
+      "sha256": "b32d329bd3a8490efb19dd82a50410d249184906747a00b1898ddbcf7bcaa81f"
+    },
+    {
+      "path": "engine/baseclient.h",
+      "sha256": "565e853471066f9b2a53d9a4e4a7d6d130e284e266043d8beb00e06136bffc37"
+    },
+    {
+      "path": "engine/baseclientstate.cpp",
+      "sha256": "b2a4be4e5c86534857fc6dec534d0e88cfaa76625292f9c6db1474986f41f334"
+    },
+    {
+      "path": "engine/cdll_engine_int.cpp",
+      "sha256": "86bc166e8700faa81c999d6491205a776bb64e107e6af580dc944406ce9ec5d5"
+    },
+    {
+      "path": "engine/cl_main.cpp",
+      "sha256": "a4ae8093d28f97231c357c5bcd087327ad6e5c760211e81e8d8724d12b274d81"
+    },
+    {
+      "path": "engine/cl_null.cpp",
+      "sha256": "4b129a85e50e4afaf295d30fc93e8748babcad25661527aa3df16517eb836ff3"
+    },
+    {
+      "path": "engine/cl_texturelistpanel.cpp",
+      "sha256": "cade3876277f9e645e230fe1d1f3b1e91aa8b2c51eb0876462240f4f01ffac1e"
+    },
+    {
+      "path": "engine/gl_matsysiface.cpp",
+      "sha256": "95a8bcaae56a7632d217dbb58b56dda3d900c5c8b4a87a2d51df59282e62f613"
+    },
+    {
+      "path": "engine/gl_shader.cpp",
+      "sha256": "76798216bad723459beef50c6c8b36023ec08d690a4dcda1815829d41aba5260"
+    },
+    {
+      "path": "engine/hltvclientstate.cpp",
+      "sha256": "9f2afa11eceedd03defe8569c483cfe68cc53c29250f8e77eedaca54502cec9f"
+    },
+    {
+      "path": "engine/host.cpp",
+      "sha256": "c827e0853edced5bd415c03f5330dcc649593967d4c601e65c1580d44b82bf2f"
+    },
+    {
+      "path": "engine/host_cmd.cpp",
+      "sha256": "d55434b91a01c4bf660c7e58134801db1540edb1359c4e262abda72fe710488e"
+    },
+    {
+      "path": "engine/keys.cpp",
+      "sha256": "2b9b3fc06bbb2137b09e1760c3e1376a01df5ebe8700c4b7503621dc697d3fb7"
+    },
+    {
+      "path": "engine/matsys_interface.cpp",
+      "sha256": "d6d207068548546f06f9c8a16dbfa1883c7b91f0f8328a55d3d4eeb0100a2d07"
+    },
+    {
+      "path": "engine/net_support.cpp",
+      "sha256": "37cb15b71d4aceed9cdf121f496242ce9cd1b1c63af3cb60cb226d632ac5c135"
+    },
+    {
+      "path": "engine/net_ws.cpp",
+      "sha256": "06017572d0f236c9eef758a27b81ef9015b2e0117e4d9e963f158e05415e1609"
+    },
+    {
+      "path": "engine/netconsole.cpp",
+      "sha256": "c6bc9e706ced614cf61bc7a800fbf3428faeb6005a8f0a55a7447314da3b259d"
+    },
+    {
+      "path": "engine/paint.cpp",
+      "sha256": "ded4116fa29247ae68b55cf0d49dfcd235d925c111139399a4fda83ad36e9d36"
+    },
+    {
+      "path": "engine/panoramaenginehandler.cpp",
+      "sha256": "9ec72fff8d446b6a9972648f0d7f41c74dc94da517aa2732b9f4651b60dd6338"
+    },
+    {
+      "path": "engine/sys_dll2.cpp",
+      "sha256": "f70a7444d332727dc675ecacae84a8c76028b828ff4023a05f4f14e9d7de20c0"
+    },
+    {
+      "path": "engine/sys_engine.cpp",
+      "sha256": "88b01aa8eb46128461a4529fa316ca5465ef35bf0088d56794892bbfe8a5e2e7"
+    },
+    {
+      "path": "engine/sys_getmodes.cpp",
+      "sha256": "db288b1299f0241609d02d18a65f94650a36a9480192572ca0509c21a64f64b1"
+    },
+    {
+      "path": "engine/sys_mainwind.cpp",
+      "sha256": "9aca0981b25ac06b80f57a19db4e17769b9a12fb44c471eb3ee18f4da88ad352"
+    },
+    {
+      "path": "filesystem/basefilesystem.cpp",
+      "sha256": "beff6a36f74b6ea0bbc009a09f158f5ef097704d03b21483f29d514b9ca07326"
+    },
+    {
+      "path": "filesystem/basefilesystem.h",
+      "sha256": "c3a55f739962d73935e46408dc274809dbe1a3ecdd34fe07aee5d8b3b703a61f"
+    },
+    {
+      "path": "game/client/c_baseplayer.cpp",
+      "sha256": "1d1b8731497b847cab44c288b2f9107eec35e65742861e6582bafdc90f1b2289"
+    },
+    {
+      "path": "game/client/c_playerresource.cpp",
+      "sha256": "70fc2886f327b386f53a019e905155ce7ad4ebe32c6f8c8a99b8eef856590d42"
+    },
+    {
+      "path": "game/client/cdll_client_int.cpp",
+      "sha256": "1605d626b2f8d38e84d66337767dd60db8363f1b09db1e84895d9566c9f1005a"
+    },
+    {
+      "path": "game/client/cdll_client_int.h",
+      "sha256": "4317c4d7b264a054ac798fd086d646c5971e71f0ccd25f07ae63bcf5793a8e9f"
+    },
+    {
+      "path": "game/client/clientmode_shared.cpp",
+      "sha256": "44e6a4249628a081df2c55a07143b871bb8a431485f43981415ddc596b97c6f2"
+    },
+    {
+      "path": "game/client/cstrike15/c_cs_player.cpp",
+      "sha256": "1822199d658f8abdcf7b5bc022df693ba2f3c27e79837610bdf3b30490f15819"
+    },
+    {
+      "path": "game/client/cstrike15/clientmode_csnormal.cpp",
+      "sha256": "dff6898aad47f5aaa6b273a55a3d4b57b094c3ac6e81f68158dd1a89cb491d64"
+    },
+    {
+      "path": "game/client/cstrike15/gameui/cstrike15/cstrike15basepanel.h",
+      "sha256": "e9e0cd9b0ff5179e5fdded01834e533d332ec277962457ef4e409b56464e79bc"
+    },
+    {
+      "path": "game/client/cstrike15/gameui/gameui_interface.cpp",
+      "sha256": "ff106cd0e87e9427993e015a13c98b3e908ceea05ff77255f28f04f61310f0d4"
+    },
+    {
+      "path": "game/client/cstrike15/gameui/uigamedata.cpp",
+      "sha256": "a45ea8656e04ac99b538ab9d5404aa55892ff7d640f5d9ec1dae58d7818ebe32"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_buymenu.cpp",
+      "sha256": "877d225d4ebe0047d386538ecd13d2fee4a8523bafd4181820a5984be5050ab9"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_buymenu.h",
+      "sha256": "b069f9884511dd3b62b3fa052cc3607ba863af75dffc746ebc05260a03dbf915"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_loadingscreen.cpp",
+      "sha256": "4025a7d0e2da387e53fdc7e22e880f4300686c3677a6aca896252bdfbaa69dec"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_panorama_script_bindings.cpp",
+      "sha256": "5ab07df8683458f62cacf18188a0505fb49a3032ea69f3cd99f8dc1d1175cf8b"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_survival_endofmatch.cpp",
+      "sha256": "6068ee22d472be6fcfc3522fa5a1e30bc2f6af718a045a89ef3e4ada05234d1f"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/csgo_videosettingsscreen.cpp",
+      "sha256": "8f2ef9f31f2ccd99487747970b502653ddb24214afa6f13998a5d04682b3e137"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/hud/csgo_hudchat.cpp",
+      "sha256": "e940c5ef6191a92b92cbfae60f513358eaee43a4b6ba1197a3e71e7c80dbc4f6"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/hud/csgo_hudfreezepanel.cpp",
+      "sha256": "5912a8f5d0d50c3e07a922e9c7a8476c8b8283584d1c1839925ee51c04d2251b"
+    },
+    {
+      "path": "game/client/cstrike15/panorama/hud/csgo_hudvoicestatus.cpp",
+      "sha256": "6caaeccb9a8a7a390e926ed710567d5c24bcae5f3c3063c50081335b1a5f3297"
+    },
+    {
+      "path": "game/client/cstrike15/uicomponents/uicomponent_common.cpp",
+      "sha256": "a88521b2a04a41e7e2e47ecf07a1fb84817a2f4b78883879f79048d377fef028"
+    },
+    {
+      "path": "game/client/cstrike15/uicomponents/uicomponent_common.h",
+      "sha256": "be8840cad2a3b5d6b443ac0262682b63c71b5d84c078ff5f95bb62a8fe0fd81a"
+    },
+    {
+      "path": "game/client/cstrike15/uicomponents/uicomponent_gamestate.cpp",
+      "sha256": "1206e1527e33202b1715b59f8caafc8a7ca5a5112559837ce6b54f928be01b4a"
+    },
+    {
+      "path": "game/client/cstrike15/uicomponents/uicomponent_uitoolkit.cpp",
+      "sha256": "f21e946ea0f8f5ba27d64c8e1c1bc03231e12e9e1e408e24dbf0a6ec323b84ae"
+    },
+    {
+      "path": "game/client/hltvcamera.cpp",
+      "sha256": "b120750165def15abcbc9ac1c286f2a7a7d9005c62c6e7746aab4bb516936cb1"
+    },
+    {
+      "path": "game/client/hud_basechat.cpp",
+      "sha256": "e307c3c9ab464be971086d9159a80179f21fe9fd5035fdb0c14d14fa3e363506"
+    },
+    {
+      "path": "game/client/panorama/ui_canvas.cpp",
+      "sha256": "07b435e86f96844a8a5b00364e41f40fafa567db5b95db5b4acfb6a3cf25846e"
+    },
+    {
+      "path": "game/client/panorama/ui_itempreview_panel.cpp",
+      "sha256": "90b7501b4618633ef915570c3e0e6da02b6aa1ab5a77a8a6d6902517f119873b"
+    },
+    {
+      "path": "game/client/panorama/ui_popup_manager.cpp",
+      "sha256": "63ffbd6935e0021b3a326e3c54504cf78f1a97460b3313fbfd83c2800cab965b"
+    },
+    {
+      "path": "game/client/steamworks_gamestats_client.cpp",
+      "sha256": "63cc19809771d8d221f7da096c6285668cfd8d50c1ce750cd097135d735bf44d"
+    },
+    {
+      "path": "game/client/steamworks_gamestats_client.h",
+      "sha256": "5b6ab2e4de4702dc22046de6fa75536265b5b8f1d68a4dde55b05ba3dfd549ba"
+    },
+    {
+      "path": "game/server/ai_movesolver.cpp",
+      "sha256": "128520195ee8b351e74cef2b7a8ff3195b9d20a677cf17070b9604256812f5dc"
+    },
+    {
+      "path": "game/server/cstrike15/bot/cs_bot.cpp",
+      "sha256": "899db24ddc9558e530abc4c37f069472a928ebbebe683a9ba3642e99d2982d7b"
+    },
+    {
+      "path": "game/server/cstrike15/cs_gameinterface.cpp",
+      "sha256": "63074a91bf4a7cc9492c75cbeaf528ee2cdccf3c75beb7e6dd2f3e35f91689a6"
+    },
+    {
+      "path": "game/server/cstrike15/cs_player.cpp",
+      "sha256": "3872e18105807026464851aec6092728d8cdeb4b32f9ab05e098bdbf4dd493ad"
+    },
+    {
+      "path": "game/shared/baseachievement.cpp",
+      "sha256": "90dd57b0a724167c39bd52aaf81e7a7a20756b19722db2938365ae27c03ea6bb"
+    },
+    {
+      "path": "game/shared/basecombatweapon_shared.cpp",
+      "sha256": "0954be7d6d15a055a28691a5ed97d48af1b949f56f34ebbb3a1d3fdb1fc3346e"
+    },
+    {
+      "path": "game/shared/basecombatweapon_shared.h",
+      "sha256": "537386d08dabb2709fcdbf9b9d7adba13a9db95fde47395541721e7e4de58338"
+    },
+    {
+      "path": "game/shared/cstrike15/achievements_cs.cpp",
+      "sha256": "6e5a12876f14235ebb800068adf762d3d744ed78e9e2160a75c6ceb224f87406"
+    },
+    {
+      "path": "game/shared/cstrike15/cs_gamerules.cpp",
+      "sha256": "5f58d74d3abdd89e905761435c0c9e4733d94c19ac7bc87cb1822bd91d8e76da"
+    },
+    {
+      "path": "game/shared/cstrike15/cs_player_shared.cpp",
+      "sha256": "7ff4409a0b8709ef9bd1969de10a02b8d7e0f99d15323f34a631f9e69dcde588"
+    },
+    {
+      "path": "game/shared/econ/econ_item_system.cpp",
+      "sha256": "8ecece2b4cac309d090044c6e7fbca369ef97f6c847f11cc92e436dfbaa711c8"
+    },
+    {
+      "path": "game/shared/steamworks_gamestats.cpp",
+      "sha256": "4aab1d474609a412c99627e488b00412405d6b51b4b6ad091618a1c659b4edfc"
+    },
+    {
+      "path": "game/shared/ugc_utils.cpp",
+      "sha256": "c489979b062a85162ffef840857116653e7155b0cdca8231b63d1869e013d342"
+    },
+    {
+      "path": "game/shared/ugc_utils.h",
+      "sha256": "42443ee0623af4cb4243db8f023cf1e3150c696d7a1d7723cc58025bbafb5340"
+    },
+    {
+      "path": "gcsdk/steamextra/tier1/tsmempool.cpp",
+      "sha256": "e58355e3d289bba54346c83ffbd59097ec885b7a8fc91022401a0219fb9cdbe6"
+    },
+    {
+      "path": "gcsdk/steamextra/tier1/tsmultimempool.cpp",
+      "sha256": "6aae9297416e7d5ca6c8ba019cc9a6f4dec7e0795563d55b9809307bd31739f8"
+    },
+    {
+      "path": "inputsystem/inputsystem.cpp",
+      "sha256": "80ddef03184136791911f79cbec1b94be41bfadb867429be0cf41a935ff54221"
+    },
+    {
+      "path": "inputsystem/inputsystem.h",
+      "sha256": "f7e308e9b24d1862fe928c728e35c8afa6253585abd9e079f19bc6e6a0d26c0d"
+    },
+    {
+      "path": "kv3lib/keyvalues3_binarywriter.cpp",
+      "sha256": "79c66d7e0b849e42a7f3e382c92d718fe82c11b8f2ee28ff565c849cd368aff4"
+    },
+    {
+      "path": "launcher/launcher.cpp",
+      "sha256": "8cdc00f4939434742fc47029563ee7f636db846a7ce9a80dea5dedd52d4b9cbb"
+    },
+    {
+      "path": "matchmaking/cstrike15/mm_title_gamesettingsmgr.cpp",
+      "sha256": "cdfaedc4d8eeb471ed4d8c712f1278275caf9ac3ecb0b8ef9187c9f9458d5d07"
+    },
+    {
+      "path": "matchmaking/mm_session_offline_custom.cpp",
+      "sha256": "bcec3ace5ad1b862e5d939392e5f19e6573530826c6f1836f39b92a27f245148"
+    },
+    {
+      "path": "matchmaking/playermanager.cpp",
+      "sha256": "f742afe9251f0512033745919b95b1cb4bb3398bed7634240cb9325a14de2398"
+    },
+    {
+      "path": "materialsystem/CMaterialSubRect.cpp",
+      "sha256": "1f7eaf1ea97877749a9518333dd70106b1f6c5dcb80245297e786b99c7e928ea"
+    },
+    {
+      "path": "materialsystem/cmaterial.cpp",
+      "sha256": "551cb98ee8c4b8b160ccbda43e5fa07e011bfe7abd6f5c7066eba7f30f311f64"
+    },
+    {
+      "path": "materialsystem/cmaterialsystem.cpp",
+      "sha256": "fe4d892527999d6eb293764e87495ef043fd043dbd7d1853ec542ec82f877241"
+    },
+    {
+      "path": "materialsystem/cmatqueuedrendercontext.cpp",
+      "sha256": "11521fe261f1607d01455fa01951b649988660038fa5ca3b171972e9c2ae234e"
+    },
+    {
+      "path": "materialsystem/cmatrendercontext.cpp",
+      "sha256": "6ac8163f35ffd7d3660e8d6f1c97841730692361bd953ddd9ed8297a6a200188"
+    },
+    {
+      "path": "materialsystem/cmatrendercontext.h",
+      "sha256": "60482193135e0e7db148e049ff34bc39e6acc55bd2fb0874845537af2d2dc37f"
+    },
+    {
+      "path": "materialsystem/ctexture.cpp",
+      "sha256": "194aa6697f2c3f85f0fe4cdd07b6f50a4eeb920d14ff69f8911548d390d8bc1c"
+    },
+    {
+      "path": "materialsystem/materialsystem_global.cpp",
+      "sha256": "28003a091e4579b68072993da407bd6516fccd84fc73e09ffebb1a57bc903fe5"
+    },
+    {
+      "path": "materialsystem/materialsystem_global.h",
+      "sha256": "bf74ed2a2efa1e2479d0e6f68b9d98c5b0e8198677b2cf0789b965aaab8ef312"
+    },
+    {
+      "path": "materialsystem/pch_materialsystem.h",
+      "sha256": "706d48cfc60742dbb6ffef9e5a7b8b7277239e9f7d30debc5850163dc94d5649"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/hardwareconfig.cpp",
+      "sha256": "ef0733a4c55851603a0ad7ae9c57606b66ba5c105fd22e45f7d75c0be36e7376"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/meshdx8.cpp",
+      "sha256": "c483eab46a49247a68913641f38b1bcbb6f08fbf4220b84e7803f33642f0690c"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/shaderapidx8.cpp",
+      "sha256": "0d3c561e71816d1ee724a209e75b53e7c82cf74d45352a758cf9061e10abb2ea"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/shaderapidx8_global.h",
+      "sha256": "330a9d7347637c064222fb117792ff9463a44e1f8250542bcef51c846814fc10"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/shaderdevicebase.cpp",
+      "sha256": "6f5faf3d899d0aa94c41d9d60833e13011e2f65560313f1e9607e9d4f98f0aa5"
+    },
+    {
+      "path": "materialsystem/shaderapidx9/shaderdevicedx8.cpp",
+      "sha256": "bc00273b9816629ef118a391288e299711a8bc4e90fe39c60ea93a83e5e932f5"
+    },
+    {
+      "path": "materialsystem/shaderapifast.h",
+      "sha256": "aeccf3464cd78cf4f60fd43ded137352cb5350773a5b7526996d87e7d54fdeae"
+    },
+    {
+      "path": "materialsystem/shaderlib/ShaderDLL.cpp",
+      "sha256": "146e96cbf53b250ea3a89f751085b8a7104de452d5d3a513453a810645403ee0"
+    },
+    {
+      "path": "materialsystem/shadersystem.cpp",
+      "sha256": "10a39a88e158ce296a1705c1e289a480bd5c0e6176a08c009b7c6e5899152d09"
+    },
+    {
+      "path": "materialsystem/stdshaders/BaseVSShader.cpp",
+      "sha256": "afd53a613442f4d59ef4dba5e3818a140d41985d7cde13f66314efd08ba51768"
+    },
+    {
+      "path": "materialsystem/texturemanager.cpp",
+      "sha256": "46403c06133062a52229e4e12c28bb3837fec3ae9d055bad4c27405de6ef2b10"
+    },
+    {
+      "path": "mathlib/mathlib_base.cpp",
+      "sha256": "2ebaee0e331128be8ad304ee63e268c2292c4f79b61d726c2d37c3473e97fd28"
+    },
+    {
+      "path": "mathlib/sse.cpp",
+      "sha256": "89e9ae223df1920c74930affe9b42f3d23a1278a7fd7155d3d3ea961f4a94079"
+    },
+    {
+      "path": "panorama/controls/panel2d.cpp",
+      "sha256": "f1ca7bdb87a9a85629ae6aeb9527ba0cb412766e6e1dfeb539583558d71605c0"
+    },
+    {
+      "path": "panorama/input/uiinput.cpp",
+      "sha256": "aeefd82f596224bd75fac01da7e30a91247ebb3d46d1e8dcddf4fd463583d772"
+    },
+    {
+      "path": "panorama/layout/stylefile.cpp",
+      "sha256": "f3080a5ad19434f150c1c7fe2e3648afa26d5f13f42c55573c0e08d9c3e55e1d"
+    },
+    {
+      "path": "panorama/source2/uienginesource2.cpp",
+      "sha256": "06e5a38c243350e9aaf86f04b5512ef2e9461d044bd3363038f7f0711df957ca"
+    },
+    {
+      "path": "panorama/text/source2/panorama_text_interface.cpp",
+      "sha256": "928c67ac3128c28f94e475cb5cd9fcb15510d38db4ea8e7fd84c5a690fd11c2f"
+    },
+    {
+      "path": "panorama/text/uifontfileloaderlinux.cpp",
+      "sha256": "4869aef821a1fa9707f12495a44e7909b2192d1fe6c85e5ea8bfb883ccf094b0"
+    },
+    {
+      "path": "panorama/text/uifontfileloaderlinux.h",
+      "sha256": "dd779ffacd6eb9bd13185e4f4bc65130fbdab79f3f5135ca92f9bbea89ca4812"
+    },
+    {
+      "path": "panorama/text/uitextlayoutpango.cpp",
+      "sha256": "4a9717639d50c329fa625d2adfca1862c79bb21d5407fc5e4dd7479597313935"
+    },
+    {
+      "path": "panorama/text/uitextservicespango.cpp",
+      "sha256": "32390e509613debe37f367e8ba9bc31ca7c33484d1c73196d33d9ed9de0cc5e3"
+    },
+    {
+      "path": "panorama/text/uitextserviceswin32.cpp",
+      "sha256": "bb8f804f1a606bd2b443306359a34d55f0067efb353e0280fd69459b313c9c27"
+    },
+    {
+      "path": "panorama/uiengine.cpp",
+      "sha256": "72b596b633d94c1ceb67e45e9f8421e7269e3ffe5dd63ae783995100c989d1dc"
+    },
+    {
+      "path": "panorama/uiengine.h",
+      "sha256": "db207cfbc8b2cfbe462434af6b33b36bd75b67692aa1abfb6336b766a1f8305d"
+    },
+    {
+      "path": "panorama/uievent.cpp",
+      "sha256": "ea980cebad28734676f5d59b1e759d6fcd4f5acbcf9e360a6cb919abf514ff04"
+    },
+    {
+      "path": "panorama/uipanel.cpp",
+      "sha256": "564abecc66e1267d86a8c9cb567932470ff1952862d8f90468f38341d5c2506c"
+    },
+    {
+      "path": "panorama_s1wrapper/wrap_misc.cpp",
+      "sha256": "a83e48f16456c4d3d00058fcf19ced15883576076d381b4a9879f6d647c528b6"
+    },
+    {
+      "path": "panorama_s1wrapper/wrap_resource.cpp",
+      "sha256": "cd30605a00b21b2f4a3c587f582bbc0b0dd7129419f5863625e84f80097da4fd"
+    },
+    {
+      "path": "public/builddisp.cpp",
+      "sha256": "fc0b0da2f289c480d4323e49e85942c54f0e59348564cbddcb551b4d01eb3b0d"
+    },
+    {
+      "path": "public/materialsystem/imesh.h",
+      "sha256": "edcb16332eca04de645563976ad2dc551b2e949fcc672f9e77d3da10ecd1f60e"
+    },
+    {
+      "path": "public/mathlib/math_pfns.h",
+      "sha256": "436dd1c9deb54d3a061e503115bbf0040a94bfc7c6a75317619a933e203e910c"
+    },
+    {
+      "path": "public/mathlib/mathlib.h",
+      "sha256": "8621413437c2c76cf9ca28d7e7efd86381c5be5a39b0013eeeb9a826040a9afc"
+    },
+    {
+      "path": "public/mathlib/ssemath.h",
+      "sha256": "2a8309e8882c457359b0ae06a950f0853f55a06b8cd2a87f4085283897f6e393"
+    },
+    {
+      "path": "public/mathlib/vector.h",
+      "sha256": "39dc5454b9a42bc082f96eda2e3e63e04dfd2d5c1a2550013e03c7dc699efaa7"
+    },
+    {
+      "path": "public/mathlib/vector4d.h",
+      "sha256": "c0f84f87312258fcf4f1b7da426edf03a1574f30a30eed89587bfedea8dd372d"
+    },
+    {
+      "path": "public/panorama/controls/panel2d.h",
+      "sha256": "d4893cc1040b1c81dd4b87bfd8a0c8fc710090fccba42c1bbda73221a490f5dc"
+    },
+    {
+      "path": "public/panorama/uijsregistration.h",
+      "sha256": "7bfbdb2324ee48bfc0737df8ea15dbbc205115f98accbfc0d75423c69d740edf"
+    },
+    {
+      "path": "public/sentence.cpp",
+      "sha256": "ec6133b645006350c7e6251ffbef4dd3963d15a7bbb815edf4ba2be6deef39a8"
+    },
+    {
+      "path": "public/steam/steamtypes.h",
+      "sha256": "a4240a8ac050d4836ff1367d3bcd101317e3c18fc88dd53dfa77a556a43e198d"
+    },
+    {
+      "path": "public/steamnetworkingsockets/isteamnetworkingsockets.h",
+      "sha256": "d9261206efd11d0b51daccfc45caee3c9e1c754c747cec74fcd7e194a3b64df6"
+    },
+    {
+      "path": "public/steamnetworkingsockets/isteamnetworkingutils.h",
+      "sha256": "27ba94f5ada872d93de19da3735e79417ee08c813ec29b99ade42f5b502d0817"
+    },
+    {
+      "path": "public/tier0/basetypes.h",
+      "sha256": "1988fcf15f957f7cd1407d2350ba68f1ca085e812606575a91f6e69801b1d480"
+    },
+    {
+      "path": "public/tier0/fasttimer.h",
+      "sha256": "67c6d96c4642119bcd6ac6f7484b307cdc1f98d92fbe1d937a69c4c7141c551e"
+    },
+    {
+      "path": "public/tier0/hardware_clock_fast.h",
+      "sha256": "547104f852ec0de63f37321ce22b5bdadb9d40545dbdd9bf3b7abf1d601342ce"
+    },
+    {
+      "path": "public/tier0/memdbgon.h",
+      "sha256": "c6c1964e8fa3752de9592bf61f3c7183781c28332385790d70a3ac6e9f9e894b"
+    },
+    {
+      "path": "public/tier0/microprofiler.h",
+      "sha256": "4f88dd6f8704a252eba3c183b8ef82884436f155c3ccc58d32363704b1d47137"
+    },
+    {
+      "path": "public/tier0/platform.h",
+      "sha256": "c201ce24de54bc05d9032417b232e8501ac655ff26142b60e291ca3fa9bf8fec"
+    },
+    {
+      "path": "public/tier0/threadtools.h",
+      "sha256": "95600cbcee23ad3eebcc5d387b79a52be357b92644b3d3d8d813712075a48e2f"
+    },
+    {
+      "path": "public/tier1/keyvalues.h",
+      "sha256": "4a158a5a00087b0709b9b3ef4efe3b85461692fa84fb91d6d9488380e4953a93"
+    },
+    {
+      "path": "public/tier1/ns_address.h",
+      "sha256": "32d5fe092c5fcda44728320ea4414ff99d0d2d11c1ff63dd60f3aeeb12eb573b"
+    },
+    {
+      "path": "public/tier1/utlsymbollarge.h",
+      "sha256": "40baa85f2721efe4ab01073638294e648640722e55aecab80cec059463bf2286"
+    },
+    {
+      "path": "public/togl/dxabstract.h",
+      "sha256": "208bb34f8b6b85af5e7c15fdc872d4db058bafc8a34d5da7e3da683816261c0d"
+    },
+    {
+      "path": "public/vallocator.cpp",
+      "sha256": "386d1e0a4b63782155ea2505c2e3910d486c0dc57e88c85ae24dc293a8ea9cff"
+    },
+    {
+      "path": "public/vgui_controls/consoledialog.h",
+      "sha256": "32a1756e6ec4344e135c00182488e4f78f673fd92f32f9b53eda088601fa01cc"
+    },
+    {
+      "path": "public/vscript/ivscript.h",
+      "sha256": "9342cb73d5da8b185f0841f646ac6d2012ce849e5777b45d41c48909b83edffa"
+    },
+    {
+      "path": "public/vscript/vscript_templates.h",
+      "sha256": "ff169f84c0f1da16910e6218a621f3ecc1e3e823a5f9fc85f6a54f133b91aa85"
+    },
+    {
+      "path": "soundsystem/lowlevel/device_sdl.cpp",
+      "sha256": "0d78f97e4d7bc9741b4a5d6c82632d63c424dce7cc402d328c82fa42eee4229d"
+    },
+    {
+      "path": "tier0/cpu.cpp",
+      "sha256": "b43a427eed39ac4578907a1791366988c9226b76ea05fc18d002952f8afbbc35"
+    },
+    {
+      "path": "tier0/cpu_posix.cpp",
+      "sha256": "9c28d7f6eece3f189a932c15eed7256e06a283f69a4aeac946909131d638bc7d"
+    },
+    {
+      "path": "tier1/mempool.cpp",
+      "sha256": "4a3ae4352f48ebee21f6f0cbe1168ae3dcbac51b5b500fe9070624d2f859e59e"
+    },
+    {
+      "path": "tier1/processor_detect_linux.cpp",
+      "sha256": "5655678c1a7c43a64265aa060b2bdc8bb7ea7c216694539fe5272b0871687ae8"
+    },
+    {
+      "path": "tier1/strtools.cpp",
+      "sha256": "d63716ce7b8c953142cf3e2dc12b08dda4122baf9885693ff6a2f6e5eeeefe8a"
+    },
+    {
+      "path": "togl/glmgr.cpp",
+      "sha256": "dfe4f474f774fae50ebc20d9eb0954187c320ceaa3f2a868466057b453536dfa"
+    },
+    {
+      "path": "vgui2/src/system_posix.cpp",
+      "sha256": "906abbb4a0d36872a17fe488d9f1114b2b2885934cb2fb1b70312e96656cf556"
+    },
+    {
+      "path": "vgui2/src/vgui.cpp",
+      "sha256": "eab965eef4a277f2a1262cb4f40d45d8e11d09d59eb82014f52ab2322b832897"
+    },
+    {
+      "path": "vgui2/vgui_controls/consoledialog.cpp",
+      "sha256": "93bfdaa351569e76729dc13136517ca9ecbce3b93aaecfbff95c1bb228b3f909"
+    },
+    {
+      "path": "vgui2/vgui_surfacelib/BitmapFont.cpp",
+      "sha256": "f9972b5e01f185f06ef47767b81194d3aa84c7ef3305a38498613a5445525713"
+    },
+    {
+      "path": "vgui2/vgui_surfacelib/osxfont.cpp",
+      "sha256": "ef5d36a3e0e50979919c65de5be24e8614eefb553f0a02eb38ac27e83eb5ff47"
+    },
+    {
+      "path": "vguimatsurface/Input.cpp",
+      "sha256": "bc47a619e3ac168230fe905516682e3784cfde9236d7ec7cbf7dc1b8d0ea0428"
+    },
+    {
+      "path": "vguimatsurface/MatSystemSurface.cpp",
+      "sha256": "e4c0340ac4ccf98ace70da0e376a660387a02800bcc93dc31f233e65b2b7af77"
+    },
+    {
+      "path": "vstdlib/jobthread.cpp",
+      "sha256": "f7267d1a307749b4e82f45c37e522644bb178d00195fea9d806c842f9794bccf"
+    },
+    {
+      "path": "vstdlib/vstrtools.cpp",
+      "sha256": "48a02e08548be40339feed554095b83e85986ac245088973f0996c4ad9a1dd16"
+    }
+  ],
+  "restored": [
+    "appframework/sdlmgr.cpp",
+    "bitmap/colorconversion.cpp",
+    "bitmap/imageformat.cpp",
+    "bitmap/resample.cpp",
+    "bitmap/tgawriter.cpp",
+    "common/GameUI/ObjectList.cpp",
+    "common/imageutils.cpp",
+    "common/pngloader.cpp",
+    "datacache/datacache.cpp",
+    "dedicated/filesystem.cpp",
+    "dedicated/sys_ded.cpp",
+    "dedicated/sys_linux.cpp",
+    "dedicated_main/main.cpp",
+    "engine/audio/private/snd_dma.cpp",
+    "engine/audio/private/snd_mix.cpp",
+    "engine/audio/private/snd_wave_data.cpp",
+    "engine/audio/private/voice_sound_engine_interface.cpp",
+    "engine/baseclient.h",
+    "engine/baseclientstate.cpp",
+    "engine/cdll_engine_int.cpp",
+    "engine/cl_main.cpp",
+    "engine/cl_null.cpp",
+    "engine/cl_texturelistpanel.cpp",
+    "engine/gl_matsysiface.cpp",
+    "engine/gl_shader.cpp",
+    "engine/hltvclientstate.cpp",
+    "engine/host.cpp",
+    "engine/host_cmd.cpp",
+    "engine/keys.cpp",
+    "engine/matsys_interface.cpp",
+    "engine/net_support.cpp",
+    "engine/net_ws.cpp",
+    "engine/netconsole.cpp",
+    "engine/paint.cpp",
+    "engine/panoramaenginehandler.cpp",
+    "engine/sys_dll2.cpp",
+    "engine/sys_engine.cpp",
+    "engine/sys_getmodes.cpp",
+    "engine/sys_mainwind.cpp",
+    "filesystem/basefilesystem.cpp",
+    "filesystem/basefilesystem.h",
+    "game/client/c_baseplayer.cpp",
+    "game/client/c_playerresource.cpp",
+    "game/client/cdll_client_int.cpp",
+    "game/client/cdll_client_int.h",
+    "game/client/clientmode_shared.cpp",
+    "game/client/cstrike15/c_cs_player.cpp",
+    "game/client/cstrike15/clientmode_csnormal.cpp",
+    "game/client/cstrike15/gameui/cstrike15/cstrike15basepanel.h",
+    "game/client/cstrike15/gameui/gameui_interface.cpp",
+    "game/client/cstrike15/gameui/uigamedata.cpp",
+    "game/client/cstrike15/panorama/csgo_buymenu.cpp",
+    "game/client/cstrike15/panorama/csgo_buymenu.h",
+    "game/client/cstrike15/panorama/csgo_loadingscreen.cpp",
+    "game/client/cstrike15/panorama/csgo_panorama_script_bindings.cpp",
+    "game/client/cstrike15/panorama/csgo_survival_endofmatch.cpp",
+    "game/client/cstrike15/panorama/csgo_videosettingsscreen.cpp",
+    "game/client/cstrike15/panorama/hud/csgo_hudchat.cpp",
+    "game/client/cstrike15/panorama/hud/csgo_hudfreezepanel.cpp",
+    "game/client/cstrike15/panorama/hud/csgo_hudvoicestatus.cpp",
+    "game/client/cstrike15/uicomponents/uicomponent_common.cpp",
+    "game/client/cstrike15/uicomponents/uicomponent_common.h",
+    "game/client/cstrike15/uicomponents/uicomponent_gamestate.cpp",
+    "game/client/cstrike15/uicomponents/uicomponent_uitoolkit.cpp",
+    "game/client/hltvcamera.cpp",
+    "game/client/hud_basechat.cpp",
+    "game/client/panorama/ui_canvas.cpp",
+    "game/client/panorama/ui_itempreview_panel.cpp",
+    "game/client/panorama/ui_popup_manager.cpp",
+    "game/client/steamworks_gamestats_client.cpp",
+    "game/client/steamworks_gamestats_client.h",
+    "game/server/ai_movesolver.cpp",
+    "game/server/cstrike15/bot/cs_bot.cpp",
+    "game/server/cstrike15/cs_gameinterface.cpp",
+    "game/server/cstrike15/cs_player.cpp",
+    "game/shared/baseachievement.cpp",
+    "game/shared/basecombatweapon_shared.cpp",
+    "game/shared/basecombatweapon_shared.h",
+    "game/shared/cstrike15/achievements_cs.cpp",
+    "game/shared/cstrike15/cs_gamerules.cpp",
+    "game/shared/cstrike15/cs_player_shared.cpp",
+    "game/shared/econ/econ_item_system.cpp",
+    "game/shared/steamworks_gamestats.cpp",
+    "game/shared/ugc_utils.cpp",
+    "game/shared/ugc_utils.h",
+    "gcsdk/steamextra/tier1/tsmempool.cpp",
+    "gcsdk/steamextra/tier1/tsmultimempool.cpp",
+    "inputsystem/inputsystem.cpp",
+    "inputsystem/inputsystem.h",
+    "kv3lib/keyvalues3_binarywriter.cpp",
+    "launcher/launcher.cpp",
+    "matchmaking/cstrike15/mm_title_gamesettingsmgr.cpp",
+    "matchmaking/mm_session_offline_custom.cpp",
+    "matchmaking/playermanager.cpp",
+    "materialsystem/CMaterialSubRect.cpp",
+    "materialsystem/cmaterial.cpp",
+    "materialsystem/cmaterialsystem.cpp",
+    "materialsystem/cmatqueuedrendercontext.cpp",
+    "materialsystem/cmatrendercontext.cpp",
+    "materialsystem/cmatrendercontext.h",
+    "materialsystem/ctexture.cpp",
+    "materialsystem/materialsystem_global.cpp",
+    "materialsystem/materialsystem_global.h",
+    "materialsystem/pch_materialsystem.h",
+    "materialsystem/shaderapidx9/hardwareconfig.cpp",
+    "materialsystem/shaderapidx9/meshdx8.cpp",
+    "materialsystem/shaderapidx9/shaderapidx8.cpp",
+    "materialsystem/shaderapidx9/shaderapidx8_global.h",
+    "materialsystem/shaderapidx9/shaderdevicebase.cpp",
+    "materialsystem/shaderapidx9/shaderdevicedx8.cpp",
+    "materialsystem/shaderapifast.h",
+    "materialsystem/shaderlib/ShaderDLL.cpp",
+    "materialsystem/shadersystem.cpp",
+    "materialsystem/stdshaders/BaseVSShader.cpp",
+    "materialsystem/texturemanager.cpp",
+    "mathlib/mathlib_base.cpp",
+    "mathlib/sse.cpp",
+    "panorama/controls/panel2d.cpp",
+    "panorama/input/uiinput.cpp",
+    "panorama/layout/stylefile.cpp",
+    "panorama/source2/uienginesource2.cpp",
+    "panorama/text/source2/panorama_text_interface.cpp",
+    "panorama/text/uifontfileloaderlinux.cpp",
+    "panorama/text/uifontfileloaderlinux.h",
+    "panorama/text/uitextlayoutpango.cpp",
+    "panorama/text/uitextservicespango.cpp",
+    "panorama/text/uitextserviceswin32.cpp",
+    "panorama/uiengine.cpp",
+    "panorama/uiengine.h",
+    "panorama/uievent.cpp",
+    "panorama/uipanel.cpp",
+    "panorama_s1wrapper/wrap_misc.cpp",
+    "panorama_s1wrapper/wrap_resource.cpp",
+    "public/builddisp.cpp",
+    "public/materialsystem/imesh.h",
+    "public/mathlib/math_pfns.h",
+    "public/mathlib/mathlib.h",
+    "public/mathlib/ssemath.h",
+    "public/mathlib/vector.h",
+    "public/mathlib/vector4d.h",
+    "public/panorama/controls/panel2d.h",
+    "public/panorama/uijsregistration.h",
+    "public/sentence.cpp",
+    "public/steam/steamtypes.h",
+    "public/steamnetworkingsockets/isteamnetworkingsockets.h",
+    "public/steamnetworkingsockets/isteamnetworkingutils.h",
+    "public/tier0/basetypes.h",
+    "public/tier0/fasttimer.h",
+    "public/tier0/hardware_clock_fast.h",
+    "public/tier0/memdbgon.h",
+    "public/tier0/microprofiler.h",
+    "public/tier0/platform.h",
+    "public/tier0/threadtools.h",
+    "public/tier1/keyvalues.h",
+    "public/tier1/ns_address.h",
+    "public/tier1/utlsymbollarge.h",
+    "public/togl/dxabstract.h",
+    "public/vallocator.cpp",
+    "public/vgui_controls/consoledialog.h",
+    "public/vscript/ivscript.h",
+    "public/vscript/vscript_templates.h",
+    "soundsystem/lowlevel/device_sdl.cpp",
+    "tier0/cpu.cpp",
+    "tier0/cpu_posix.cpp",
+    "tier1/mempool.cpp",
+    "tier1/processor_detect_linux.cpp",
+    "tier1/strtools.cpp",
+    "togl/glmgr.cpp",
+    "vgui2/src/system_posix.cpp",
+    "vgui2/src/vgui.cpp",
+    "vgui2/vgui_controls/consoledialog.cpp",
+    "vgui2/vgui_surfacelib/BitmapFont.cpp",
+    "vgui2/vgui_surfacelib/osxfont.cpp",
+    "vguimatsurface/Input.cpp",
+    "vguimatsurface/MatSystemSurface.cpp",
+    "vstdlib/jobthread.cpp",
+    "vstdlib/vstrtools.cpp"
+  ],
+  "unmatched": []
+}

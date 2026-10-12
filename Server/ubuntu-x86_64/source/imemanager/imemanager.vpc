@@ -1,0 +1,62 @@
+//-----------------------------------------------------------------------------
+//	imemanager project script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR		".."
+$Macro OUTBINDIR	"$SRCDIR\..\game\bin"
+
+$Conditional		STRICT_TYPE_CONVERSION_WARNINGS_ACTIVE	"true"
+
+$include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+
+$Configuration
+{ 
+	$Linker
+	{
+		$AdditionalDependencies			"$BASE imm32.lib uuid.lib"
+	}
+}
+
+$Project "IMEManager"
+{
+	$Folder	"Header Files"
+	{
+		$File "gfx_imemanager.h"
+		$File "gfx_candidatelistbox.h"
+		$File "gfx_imeidmap.h"	
+		$File "gfx_imemanagerwin32.h"	
+		$File "gfx_imenamesmanagervista.h"	
+		$File "gfx_imenamesmanagerxp.h"	
+		$File "gfx_imetsf.h"	
+		$File "gfx_imeunicodemap.h"
+		$File "gfx_imewin32impl.h"
+		$File "gfx_tsfuielementdef.h"
+	}
+
+	$Folder	"Public Headers"
+	{
+		$File "$SRCDIR\public\iimemanager.h"
+	}
+
+	$Folder "Source Files"
+	{
+		$File "imemanager.cpp"
+		$File "imemanager.h"
+
+		$File "gfx_imemanager.cpp"
+		$File "gfx_candidatelistbox.cpp"	
+		$File "gfx_imeidmap.cpp"	
+		$File "gfx_imemanagerwin32.cpp"
+		$File "gfx_imenamesmanagervista.cpp"
+		$File "gfx_imenamesmanagerxp.cpp"	
+		$File "gfx_imetsf.cpp"	
+		$File "gfx_imevista.cpp"	
+		$File "gfx_imexp.cpp"
+		$File "gfx_imewin32impl.cpp"
+	}
+	
+	$Folder	"Link Libraries"
+	{
+		$Lib	"tier2"
+	}
+}

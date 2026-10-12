@@ -1,5 +1,24 @@
 // A startup-only UIKit surface. No blur or timer survives entry to the lobby.
 #include "announcement_clock.h"
+// Persist completion separately from diagnostic logs. Upgrade existing installs
+// that already completed the old announcement, without another forced wait.
+static NSString *const ICSMAnnouncementCompletedKey = @"ICSMFirstDataStartupAnnouncementCompleted";
+static BOOL ICSMHasCompletedStartupAnnouncement(NSUserDefaults *defaults,NSString *directory) {
+ if([defaults boolForKey:ICSMAnnouncementCompletedKey])return YES;
+ NSData *data=[NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:@"startup-announcement.json"]];
+ id record=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;
+ if(![record isKindOfClass:NSDictionary.class])return NO;
+ id complete=record[@"complete"],elapsed=record[@"foreground_seconds"],required=record[@"required_seconds"];
+ if(![complete isKindOfClass:NSNumber.class] || ![elapsed isKindOfClass:NSNumber.class] || ![required isKindOfClass:NSNumber.class])return NO;
+ const double seconds=[elapsed doubleValue],minimum=[required doubleValue];
+ if(![complete boolValue] || !std::isfinite(seconds) || !std::isfinite(minimum) ||
+    minimum<ICSMAnnouncementClock::requiredSeconds || seconds<minimum)return NO;
+ [defaults setBool:YES forKey:ICSMAnnouncementCompletedKey];
+ return YES;
+}
+static void ICSMMarkStartupAnnouncementCompleted(NSUserDefaults *defaults) {
+ [defaults setBool:YES forKey:ICSMAnnouncementCompletedKey];
+}
 static NSString *const ICSMAnnouncementText =
  @"该游戏由且仅由bilibili@SU_ZeShin个人移植，且仅将数据包的iCloud链接上传至GitHub，和Q群1065438652\n\n"
  @"如果你从其他任何国内外网盘下载到该资源，请在心里默念：盗游戏的全族死绝🙏\n\n"
@@ -46,7 +65,7 @@ static NSString *const ICSMAnnouncementText =
   self.countdown.font=[UIFont monospacedDigitSystemFontOfSize:pad?17:14 weight:UIFontWeightMedium];
   self.countdown.textAlignment=NSTextAlignmentCenter;
   self.countdown.accessibilityIdentifier=@"ICSMAnnouncementCountdown";
-  self.countdown.text=@"请阅读公告 · 20 秒后进入大厅";
+  self.countdown.text=[NSString stringWithFormat:@"请阅读公告 · %.0f 秒后进入大厅",ICSMAnnouncementClock::requiredSeconds];
   for(UIView *v in @[title,self.scroll,self.countdown]) {
    v.translatesAutoresizingMaskIntoConstraints=NO;[self.panel.contentView addSubview:v];
   }

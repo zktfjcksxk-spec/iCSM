@@ -1,0 +1,172 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// STATIC: "TRANSLUCENT"				"0..1"
+// STATIC: "LIGHTING_PREVIEW"			"0..2"	[PC]
+// STATIC: "LIGHTING_PREVIEW"			"0..0"	[CONSOLE]
+// STATIC: "CUSTOM_MODE"				"0..2"  [ps20b]
+
+#include "common_fog_ps_fxc.h"
+// DYNAMIC: "WRITE_DEPTH_TO_DESTALPHA"	"0..1"	[ps20b] [PC]
+// DYNAMIC: "WRITE_DEPTH_TO_DESTALPHA"	"0..0"	[ps20b] [CONSOLE]
+
+// SKIP: ( CUSTOM_MODE > 0 ) && ( LIGHTING_PREVIEW > 0 )
+
+#if defined( SHADER_MODEL_PS_2_0 )
+	#define WRITE_DEPTH_TO_DESTALPHA 0
+#endif
+
+#include "common_ps_fxc.h"
+#include "shader_constant_register_map.h"
+
+const float4 g_DiffuseModulation	: register( c1 );
+#if !FLASHLIGHT
+		// we don't use these with HDR.
+		const float3 g_EnvmapContrast		: register( c2 );
+		const float3 g_EnvmapSaturation		: register( c3 );
+#endif
+
+#if CUSTOM_MODE == 1
+	const float4	g_fvConstRegister4		: register( c4 );
+	#define			g_flXHairColorTint		g_fvConstRegister4.xyz
+	#define			g_flXHairColorAdapt		g_fvConstRegister4.w
+#elif CUSTOM_MODE == 2
+	const float4	g_fvConstRegister4		: register( c4 );
+#endif
+
+const float4 g_FogParams				: register( PSREG_FOG_PARAMS );
+const float4 g_EyePos_SpecExponent		: register( PSREG_EYEPOS_SPEC_EXPONENT );
+
+const float4 g_FlashlightAttenuationFactors	    : register( c22 );
+const float3 g_FlashlightPos						: register( c23 );
+const float4x4 g_FlashlightWorldToTexture		: register( c24 ); // through c27
+
+sampler BaseTextureSampler	   : register( s0 );
+sampler BaseTextureSampler2	   : register( s1 );
+
+struct PS_INPUT
+{
+    float4 projPos					: POSITION;			// Projection-space position	
+	float2 baseTexCoord				: TEXCOORD0;		// Base texture coordinate
+	float2 baseTexCoord2				: TEXCOORD1;		// Base texture coordinate
+	float4 worldPos_projPosZ		: TEXCOORD7;		// Necessary for water fog dest alpha
+	
+#if defined( _X360 ) //matching pixel shader inputs to vertex shader outputs to avoid shader patches	
+	float4 vColor	: COLOR0;
+#endif
+};
+
+#if CUSTOM_MODE == 2
+float pcurve( float x, float a, float b ){
+    float k = pow(a+b,a+b) / (pow(a,a)*pow(b,b));
+    return k * pow( x, a ) * pow( 1.0-x, b );
+}
+#endif
+
+#if LIGHTING_PREVIEW == 2
+LPREVIEW_PS_OUT main( PS_INPUT i ) : COLOR
+#else
+float4_color_return_type main( PS_INPUT i ) : COLOR
+#endif
+{
+#if LIGHTING_PREVIEW == 1
+
+	#if CUSTOM_MODE == 2
+		float flBeachFoamPreview = tex2D( BaseTextureSampler, i.baseTexCoord.xy ).r + 0.1;
+		return float4(flBeachFoamPreview.xxx,1);
+	#else
+		return FinalOutput( float4( 0.0f, 0.0f, 0.0f, 1.0f ), 0, PIXEL_FOG_TYPE_NONE, TONEMAP_SCALE_LINEAR );
+	#endif
+	
+#elif LIGHTING_PREVIEW == 2
+
+	LPREVIEW_PS_OUT ret;
+	ret.flags=float4(1,1,1,1);
+	ret.color=float4( 0.0f, 0.0f, 0.0f, 1.0f );
+	ret.normal=float4( 0.0f, 0.0f, 1.0f, 1.0f );
+	ret.position=float4( i.worldPos_projPosZ.xyz, 1.0f );
+	return FinalOutput( ret, 0, PIXEL_FOG_TYPE_NONE, TONEMAP_SCALE_NONE );
+	
+#elif (LIGHTING_PREVIEW == 0)
+	
+	float4 result = float4(0,0,0,0);
+
+	#if CUSTOM_MODE == 0
+	
+		float4 baseColor = tex2D( BaseTextureSampler, i.baseTexCoord.xy );
+		float4 baseColor2 = tex2D( BaseTextureSampler2, i.baseTexCoord2.xy );
+		result = baseColor * baseColor2 * g_DiffuseModulation;
+		
+		// This material can only get a non-opaque alpha if the material is marked as translucent
+		# if ( TRANSLUCENT == 0 )
+		result.a = 1.0f;
+		# endif
+		
+	#elif CUSTOM_MODE == 1
+
+		//crosshair mode samples the secondary texture (the power-of-two framebuffer is intended)
+		//and lerps the result based on a multi-tap average of the luminance
+		
+		float flAverageLum = 0.0f;
+			
+		float2 offsets[5] = {
+			float2( 0.5f, 0.5f ),
+			float2( 0.51f, 0.51f ),
+			float2( 0.51f, 0.49f ),
+			float2( 0.49f, 0.51f ),
+			float2( 0.49f, 0.49f )
+		};
+			
+		for ( int k = 0; k < 5; k++ )
+		{
+			flAverageLum += dot( tex2D( BaseTextureSampler2, float2( 0.5f, 0.5f ) ).rgb, float3(0.299,0.587,0.114) );
+		}
+
+		flAverageLum *= 0.2f;
+		
+		result = tex2D( BaseTextureSampler, i.baseTexCoord.xy );
+		result.rgb = lerp( result.rgb + g_flXHairColorTint, result.rgb * g_flXHairColorTint, flAverageLum * g_flXHairColorAdapt );
+
+		return FinalOutput( result * g_DiffuseModulation, 0, PIXEL_FOG_TYPE_NONE, TONEMAP_SCALE_NONE );
+		
+	#elif CUSTOM_MODE == 2
+		// beach waves
+		
+		float flTime1 = g_fvConstRegister4.x;
+		float flModTime = fmod( flTime1, 16.0 ) / 16.0;
+		float2 vUV = i.baseTexCoord.xy;
+		
+		float2 sampleDistort = tex2D( BaseTextureSampler, vUV ).gb;
+		vUV += sampleDistort.x * 0.06;// distort1
+		vUV.x *= 1 + (sampleDistort.y - 0.5) * 0.6; // distort2
+		
+		float2 vUVfoam1 = vUV;
+		vUVfoam1 *= sin( flTime1 ) * -0.05 + 1; // scale
+		vUVfoam1.x += pcurve( flModTime, 0.95, 2 ) - 1; // scroll
+		vUVfoam1.y -= sin( flTime1 * 0.5 ) * 0.1;
+		float flFoam1 = tex2D( BaseTextureSampler, vUVfoam1 ).r;
+		flFoam1 -= 1 - smoothstep( 0.0, 0.2, flModTime ) * smoothstep( 0.9, 0.5, flModTime ); // crush
+		
+		flTime1 += 8;
+		flModTime = fmod( flTime1, 16.0 ) / 16.0;
+		
+		float2 vUVfoam2 = vUV;
+		vUVfoam2 *= sin( flTime1 ) * -0.05 + 1; // scale
+		vUVfoam2.x += pcurve( flModTime, 0.95, 2 ) - 1; // scroll
+		vUVfoam2.y -= sin( flTime1 * 0.5 ) * 0.1 + 0.5;
+		float flFoam2 = tex2D( BaseTextureSampler, vUVfoam2 ).r;
+		flFoam2 -= 1 - smoothstep( 0.0, 0.2, flModTime ) * smoothstep( 0.9, 0.5, flModTime ); // crush
+		
+		result = saturate(flFoam1) + saturate(flFoam2);
+		
+		result *= 1-i.baseTexCoord.x; // edge fade1
+		result *= 0.8-abs(pow(vUV.y-0.9,2)); // edge fade2
+		
+		result *= g_DiffuseModulation;
+		
+	#endif
+	
+	float fogFactor = CalcPixelFogFactor( PIXELFOGTYPE, g_FogParams, g_EyePos_SpecExponent.xyz, i.worldPos_projPosZ.xyz, i.worldPos_projPosZ.w );
+	return FinalOutput( result, fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, (WRITE_DEPTH_TO_DESTALPHA != 0), i.worldPos_projPosZ.w );
+#endif
+}
+

@@ -1,4 +1,6 @@
 #include "native_objects.h"
+#import <UIKit/UIKit.h>
+#include "texture_staging_pool.h"
 #include "metal_perf_ios.h"
 #include "metal_combat_ios.h"
 #include "pipeline_warm_ios.h"
@@ -127,6 +129,7 @@ id<MTLTexture> Texture::view(bool gamma) {
     }
     return result;
 }
+static void registerTextureMemory(const std::shared_ptr<Texture>& texture);
 std::shared_ptr<Texture> newTexture(unsigned w,unsigned h,unsigned depth,unsigned levels,
     unsigned slices,unsigned samples,DWORD usage,D3DFORMAT f,const char *label,bool lockableRenderTarget) {
     @autoreleasepool {
@@ -150,10 +153,12 @@ std::shared_ptr<Texture> newTexture(unsigned w,unsigned h,unsigned depth,unsigne
     image->texture=[device() newTextureWithDescriptor:d];
     if (!image->texture) fatal("texture allocation", [NSString stringWithFormat:@"%s %ux%ux%u format %d",label ?: "",w,h,depth,f]);
     if (label) image->texture.label=@(label);
-    configureLightmapShadow(*image,usage,label);
+    registerTextureMemory(image);
+    configureLightmapShadow(image,usage,label);
     return image;
     } // autoreleasepool
 }
+#include "texture_staging_ios.inc"
 HRESULT lockImage(Image &ref,unsigned mip,unsigned face,const D3DBOX *box,DWORD flags,D3DLOCKED_BOX &out) {
     Texture &t=*ref.image;
     if (mip>=t.levels || face>=t.slices || t.format.depth || t.samples!=1 || t.texture.storageMode==MTLStorageModePrivate) return D3DERR_INVALIDCALL;
@@ -167,7 +172,8 @@ HRESULT lockImage(Image &ref,unsigned mip,unsigned face,const D3DBOX *box,DWORD 
     l.imagePitch=l.pitch*((l.region.size.height+t.format.block-1)/t.format.block);
     l.flags=flags;l.active=true;l.shadow=false;
     if(mip==0 && face==0 && lockLightmapShadow(t,l,out))return S_OK;
-    l.data.resize(l.imagePitch*l.region.size.depth);
+    if(icsm_metal_texture_staging_pool.GetBool())textureStaging.acquire(l.data,size_t(l.imagePitch)*l.region.size.depth);
+    else l.data.resize(size_t(l.imagePitch)*l.region.size.depth);
     if (!(flags&D3DLOCK_DISCARD)) [t.texture getBytes:l.data.data() bytesPerRow:l.pitch bytesPerImage:l.imagePitch fromRegion:l.region mipmapLevel:mip slice:face];
     out.pBits=l.data.data(); out.RowPitch=l.pitch; out.SlicePitch=l.imagePitch;
     return S_OK;
@@ -181,10 +187,13 @@ HRESULT unlockImage(Image &ref,unsigned mip,unsigned face) {
     if(mip==0 && face==0)rememberLightmapWrite(t,l);
     if (!(l.flags&D3DLOCK_READONLY)) [t.texture replaceRegion:l.region mipmapLevel:mip slice:face withBytes:l.data.data() bytesPerRow:l.pitch bytesPerImage:l.imagePitch];
     l.active=false;
+    if(icsm_metal_texture_staging_pool.GetBool())textureStaging.recycle(l.data);
     return S_OK;
 }
 void beginCommand(Device &d) {
     @autoreleasepool {
+    watchTextureMemoryWarnings();
+    if(textureMemoryWarning.exchange(false))trimTextureScratch();
     // A buffer may return to the upload pool only after all its GPU reads
     // finish. Check completion on the Source render thread, without blocking.
     for(auto it=d.pendingUploads.begin();it!=d.pendingUploads.end();) {

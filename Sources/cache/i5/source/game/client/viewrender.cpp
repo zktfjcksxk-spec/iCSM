@@ -115,6 +115,9 @@ extern ConVar r_depthoverlay;
 extern ConVar r_shadow_deferred;
 extern ConVar mat_viewportscale;
 extern ConVar icsm_scene_render_percent;
+extern ConVar icsm_scene_output_width;
+extern ConVar icsm_scene_output_height;
+#include "scene_resolution_policy.h"
 extern ConVar mat_viewportupscale;
 
 extern ConVar sv_force_reflections;
@@ -4164,7 +4167,9 @@ void CViewRender::RenderView( const CViewSetup &view, const CViewSetup &hudViewS
 	}
 
 #if defined( USE_SDL )
-	if ( mat_viewportupscale.GetBool() && mat_viewportscale.GetFloat() * ( icsm_scene_render_percent.GetFloat() / 100.0f ) < 1.0f ) 
+    // Compare actual rectangles: the UI canvas no longer sets the 3D budget.
+    if ( mat_viewportupscale.GetBool() &&
+         ( view.width != view.m_nUnscaledWidth || view.height != view.m_nUnscaledHeight ) )
 	{
 		CMatRenderContextPtr pRenderContext( materials );
 
@@ -4182,24 +4187,45 @@ void CViewRender::RenderView( const CViewSetup &view, const CViewSetup &hudViewS
 		UpscaleRect.width = view.m_nUnscaledWidth;
 		UpscaleRect.height = view.m_nUnscaledHeight;
 
-        bool spatialDone = false;
+        // MetalFX keeps the original preset's output size. Expanding the
+        // scene to the native UI canvas is a separate, scene-only linear pass.
+        Rect_t SceneOutputRect = UpscaleRect;
 #if defined(SOURCE_IOS)
-        static ICSMSpatialSceneFn spatialScene = reinterpret_cast<ICSMSpatialSceneFn>(
-            dlsym(RTLD_DEFAULT, "SourceMetalSpatialUpscaleScene"));
-        if ( spatialScene )
+        const ICSMDisplay::SceneResolution scene = ICSMDisplay::ScenePlan(
+            {unsigned(icsm_scene_output_width.GetInt()), unsigned(icsm_scene_output_height.GetInt())},
+            icsm_scene_render_percent.GetFloat(),
+            {unsigned(UpscaleRect.width), unsigned(UpscaleRect.height)});
+        if ( scene.output.width && scene.output.height && !VGui_IsSplitScreen() )
         {
-            // Original CopyRenderTargetToTextureEx flushes queued Source meshes.
-            // The direct Metal path needs that same ordering before encoding.
-            pRenderContext->Flush( false );
-            const ICSMSceneRect input = {DownscaleRect.x, DownscaleRect.y, DownscaleRect.width, DownscaleRect.height};
-            const ICSMSceneRect output = {UpscaleRect.x, UpscaleRect.y, UpscaleRect.width, UpscaleRect.height};
-            spatialDone = spatialScene( &input, &output );
+            SceneOutputRect.width = scene.output.width;
+            SceneOutputRect.height = scene.output.height;
         }
 #endif
-        if ( !spatialDone )
+        if ( DownscaleRect.width != SceneOutputRect.width || DownscaleRect.height != SceneOutputRect.height )
         {
-            pRenderContext->CopyRenderTargetToTextureEx( pFullFrameFB1, 0, &DownscaleRect, &DownscaleRect );
-            pRenderContext->CopyTextureToRenderTargetEx( 0, pFullFrameFB1, &DownscaleRect, &UpscaleRect );
+            bool spatialDone = false;
+#if defined(SOURCE_IOS)
+            static ICSMSpatialSceneFn spatialScene = reinterpret_cast<ICSMSpatialSceneFn>(
+                dlsym(RTLD_DEFAULT, "SourceMetalSpatialUpscaleScene"));
+            if ( spatialScene )
+            {
+                // Flush queued Source meshes before the direct Metal encoder.
+                pRenderContext->Flush( false );
+                const ICSMSceneRect input = {DownscaleRect.x, DownscaleRect.y, DownscaleRect.width, DownscaleRect.height};
+                const ICSMSceneRect output = {SceneOutputRect.x, SceneOutputRect.y, SceneOutputRect.width, SceneOutputRect.height};
+                spatialDone = spatialScene( &input, &output );
+            }
+#endif
+            if ( !spatialDone )
+            {
+                pRenderContext->CopyRenderTargetToTextureEx( pFullFrameFB1, 0, &DownscaleRect, &DownscaleRect );
+                pRenderContext->CopyTextureToRenderTargetEx( 0, pFullFrameFB1, &DownscaleRect, &SceneOutputRect );
+            }
+        }
+        if ( SceneOutputRect.width != UpscaleRect.width || SceneOutputRect.height != UpscaleRect.height )
+        {
+            pRenderContext->CopyRenderTargetToTextureEx( pFullFrameFB1, 0, &SceneOutputRect, &SceneOutputRect );
+            pRenderContext->CopyTextureToRenderTargetEx( 0, pFullFrameFB1, &SceneOutputRect, &UpscaleRect );
         }
 	}
 #endif

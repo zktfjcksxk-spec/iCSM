@@ -4,6 +4,10 @@ static ConVar icsm_metal_pass_reuse("icsm_metal_pass_reuse","1",FCVAR_RELEASE,"I
 static ConVar icsm_metal_temporary_reuse("icsm_metal_temporary_reuse","1",FCVAR_RELEASE,"I5 lazy query buffers and cached clear states; diagnostic A/B switch");
 static ConVar icsm_metal_touch_pass_merge("icsm_metal_touch_pass_merge","1",FCVAR_RELEASE,"Draw touch controls in the final presentation pass; diagnostic A/B switch");
 static ConVar icsm_metal_buffer_reuse("icsm_metal_buffer_reuse","1",FCVAR_RELEASE,"Reuse completed vertex/index rename buffers; diagnostic A/B switch");
+static ConVar icsm_metal_invariant_clear_reuse("icsm_metal_invariant_clear_reuse","1",FCVAR_RELEASE,
+    "Keep the active Metal sRGB target view for exact endpoint clear colors");
+static ConVar icsm_metal_pass_descriptor_reuse("icsm_metal_pass_descriptor_reuse","1",FCVAR_RELEASE,
+    "Reuse Source render-pass descriptors after encoding, without retaining map textures");
 static ConVar icsm_metal_csm_discard_dummy("icsm_metal_csm_discard_dummy","0",FCVAR_ARCHIVE | FCVAR_RELEASE,
     "Discard unused CSM dummy color attachment contents; shadow depth remains stored",true,0,true,1);
 namespace SourceMetal {
@@ -29,7 +33,8 @@ static const char *perfNames[]={"passes","copies","blits","visibility_allocation
     "target_changes","depth_changes","gamma_changes","encoder_ends","color_loads","color_stores",
     "depth_loads","depth_stores","stencil_loads","stencil_stores",
     "lightmap_shadow_locks","lightmap_uploads","lightmap_upload_bytes","lightmap_invalidations","spatial_upscales","spatial_fallbacks",
-    "buffer_renames","buffer_allocations","buffer_reuses","buffer_preserved_bytes","buffer_rename_cpu_ns","buffer_evictions"};
+    "buffer_renames","buffer_allocations","buffer_reuses","buffer_preserved_bytes","buffer_rename_cpu_ns","buffer_evictions",
+    "invariant_clear_reuses","attachment_pass_breaks","sample_alias_pass_breaks","pass_descriptor_allocations"};
 static_assert(sizeof(perfNames)/sizeof(perfNames[0])==static_cast<unsigned>(PerfCount::Count),"Performance counter names must match their enum");
 void perfCount(PerfCount kind,unsigned long long amount) {
     if(perfActive && perfInFrame)perfCurrent.counts[static_cast<unsigned>(kind)]+=amount;

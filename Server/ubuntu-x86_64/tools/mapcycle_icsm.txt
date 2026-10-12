@@ -1,0 +1,4 @@
+de_mirage
+de_inferno
+de_dust2
+de_vertigo

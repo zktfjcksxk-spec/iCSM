@@ -9,19 +9,18 @@
       <Panel id="OfflineInventorySourceContent" class="offline-inventory-source-content">
         <Panel class="offline-inventory-header">
             <Button id="OfflineInventoryBack" class="offline-inventory-back" onactivate="OfflineInventory.Back();"><Label text="‹ 返回库存" /></Button>
-            <Panel class="offline-inventory-filter-left">
+            <Panel class="offline-inventory-filters">
                 <Button id="OfflineCategory_all" onactivate="OfflineInventory.SetCategory('all');"><Label text="全部" /></Button>
                 <Button id="OfflineCategory_secondary" onactivate="OfflineInventory.SetCategory('secondary');"><Label text="手枪" /></Button>
                 <Button id="OfflineCategory_smg" onactivate="OfflineInventory.SetCategory('smg');"><Label text="冲锋枪" /></Button>
                 <Button id="OfflineCategory_rifle" onactivate="OfflineInventory.SetCategory('rifle');"><Label text="步枪" /></Button>
-            </Panel>
-            <Label id="OfflineInventoryTitle" text="库存" />
-            <Panel class="offline-inventory-filter-right">
                 <Button id="OfflineCategory_sniper" onactivate="OfflineInventory.SetCategory('sniper');"><Label text="狙击枪" /></Button>
                 <Button id="OfflineCategory_shotgun" onactivate="OfflineInventory.SetCategory('shotgun');"><Label text="霰弹枪" /></Button>
                 <Button id="OfflineCategory_machinegun" onactivate="OfflineInventory.SetCategory('machinegun');"><Label text="机枪" /></Button>
                 <Button id="OfflineCategory_melee" onactivate="OfflineInventory.SetCategory('melee');"><Label text="刀具" /></Button>
+                <Button id="OfflineCategory_gloves" onactivate="OfflineInventory.SetCategory('gloves');"><Label text="手套" /></Button>
             </Panel>
+            <Label id="OfflineInventoryTitle" text="" />
         </Panel>
         <Label id="OfflineInventoryHint" class="offline-inventory-hint" text="点按选择皮肤 · 长按查看阵营／装备" />
         <Panel id="OfflineInventoryItems" class="offline-inventory-items" />

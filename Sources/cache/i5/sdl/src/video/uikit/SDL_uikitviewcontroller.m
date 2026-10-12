@@ -100,6 +100,10 @@ SDL_HideHomeIndicatorHintChanged(void *userdata, const char *name, const char *o
 {
     if (self = [super initWithNibName:nil bundle:nil]) {
         self.window = _window;
+#if !TARGET_OS_TV
+        /* iCSM gamepad responder isolation */
+        self.controllerUserInteractionEnabled = NO;
+#endif
 
 #ifdef SDL_IPHONE_KEYBOARD
         [self initKeyboard];

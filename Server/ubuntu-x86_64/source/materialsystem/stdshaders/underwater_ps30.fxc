@@ -1,0 +1,45 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+const float4 g_Const0 : register( c0 );
+
+sampler Sampler0 : register( s0 );
+sampler Sampler1 : register( s1 );
+
+//sampler DepthSampler : register( s1 );
+
+#define g_flHeightSoft	g_Const0.x
+#define g_flHeightExact	g_Const0.y
+#define g_flTime	g_Const0.z
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+float4 main( PS_INPUT i ) : COLOR
+{
+	clip( i.vBaseUV.y - g_flHeightSoft );
+	
+	float2 vDistortUV = i.vBaseUV;
+	vDistortUV.y *= 0.7;
+	vDistortUV.y -= fmod( g_flTime, 20.0 ) / 20.0;
+	float2 vDistort = tex2D( Sampler1, vDistortUV ).rgb;
+	vDistort.x -= 0.5;
+	vDistort.y -= 0.5;
+	
+	float flDrain = smoothstep( g_flHeightSoft, g_flHeightExact, i.vBaseUV.y );
+	
+	float2 vFBUV = i.vBaseUV + (vDistort * 0.1 * flDrain);
+	float3 cOut = tex2D( Sampler0, vFBUV ).rgb;
+	
+	float flGrad = smoothstep( g_flHeightSoft + 1, g_flHeightSoft, i.vBaseUV.y );
+	flGrad = pow( flGrad, 0.3 );
+	cOut *= flGrad;
+	
+	cOut.r = lerp( cOut.r, cOut.r * 0.8, flDrain );
+	
+	return float4( cOut.rgb, 1 );
+}
+

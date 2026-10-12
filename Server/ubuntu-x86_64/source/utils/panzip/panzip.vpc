@@ -1,0 +1,50 @@
+//-----------------------------------------------------------------------------
+//	PANZIP.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR		"..\.."
+$Macro OUTBINDIR	"$SRCDIR\..\game\bin"
+
+$Include "$SRCDIR\vpc_scripts\source_exe_con_base.vpc"
+
+$include "$SRCDIR\external\external.vpc" [$WINDOWS]
+$include "$SRCDIR\external\$EXTERNALCRYPTOPP\external_cryptopp.vpc" [$WINDOWS]
+
+$Configuration
+{
+	$Compiler
+	{
+		$AdditionalIncludeDirectories		"$BASE,..\common"
+	}
+}
+
+$Project "panzip"
+{
+	$Folder	"Source Files"
+	{
+		$File	"panzip.cpp"
+		$File	"stripsrvl.cpp"
+		$File	"stripblocks.cpp"
+		$File	"..\common\cmdlib.cpp"
+		$File	"$SRCDIR\public\filesystem_helpers.cpp"
+		$File	"$SRCDIR\public\filesystem_init.cpp"
+		$File	"..\common\filesystem_tools.cpp"
+		$File	"$SRCDIR\public\zip_utils.cpp"
+	}
+
+	$Folder	"Header Files"
+	{
+		$File	"stripblocks.h"
+		$File	"stripsrvl.h"
+		$File	"$SRCDIR\public\filesystem_helpers.h"
+		$File	"..\common\filesystem_tools.h"
+		$File	"$SRCDIR\public\zip_utils.h"
+	}
+
+	$Folder	"Link Libraries"
+	{
+		$File	"$SRCDIR\lib\public\tier2.lib"
+	}
+}

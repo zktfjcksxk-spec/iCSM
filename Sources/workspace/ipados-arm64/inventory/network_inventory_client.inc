@@ -14,7 +14,7 @@ class CICSMNetworkInventory : public CAutoGameSystemPerFrame
     bool dirty;
     double nextSend;
     KeyValues *pending;
-    int generation, batch, count;
+    int generation, batch, count, rowsPerBatch, version;
     void Clear()
     {
         if (pending) pending->deleteThis();
@@ -25,6 +25,7 @@ class CICSMNetworkInventory : public CAutoGameSystemPerFrame
         pending = new KeyValues("entries");
         generation = generation >= 2147483646 ? 1 : generation + 1;
         count = batch = 0;
+        version=icsm_inventory_protocol.GetInt()>=2?2:1;rowsPerBatch=version==2?1:3;
         const auto &definitions = GetItemSchema()->GetItemDefinitionMap();
         for (int team = TEAM_TERRORIST; team <= TEAM_CT; ++team)
             FOR_EACH_MAP_FAST(definitions, i)
@@ -40,21 +41,27 @@ class CICSMNetworkInventory : public CAutoGameSystemPerFrame
                 row->SetInt("team", team); row->SetInt("slot", slot); row->SetInt("definition", index);
                 row->SetInt("selected", equipped && equipped->IsValid() && equipped->GetItemDefinition()->GetDefinitionIndex() == index);
                 row->SetInt("paint", skin.paint); row->SetInt("seed", skin.seed); row->SetFloat("wear", skin.wear);
+                if(version==2) {
+                    const auto stickers=ICSMStickers::Read(index,skin.paint);
+                    for(int n=0;n<ICSMStickers::Slots(index);++n) {
+                        char field[8];V_snprintf(field,sizeof(field),"s%d",n);row->SetInt(field,stickers.ids[n]);
+                    }
+                }
             }
         dirty = false;
     }
 public:
     CICSMNetworkInventory() : CAutoGameSystemPerFrame("iCSMNetworkInventory"), dirty(true),
-        nextSend(0), pending(NULL), generation(0), batch(0), count(0) {}
+        nextSend(0), pending(NULL), generation(0), batch(0), count(0), rowsPerBatch(3), version(1) {}
     ~CICSMNetworkInventory() { Clear(); }
     void Changed() { dirty = true; }
     void LevelInitPostEntity() OVERRIDE { Clear(); dirty = true; }
     void LevelShutdownPreEntity() OVERRIDE { Clear(); dirty = true; }
-    void Acknowledge(int version, int receivedGeneration, int receivedBatch)
+    void Acknowledge(int receivedVersion, int receivedGeneration, int receivedBatch)
     {
-        if (version != 1 || !pending || receivedGeneration != generation || receivedBatch != batch) return;
+        if (receivedVersion != version || !pending || receivedGeneration != generation || receivedBatch != batch) return;
         ++batch;
-        if (batch * 3 >= count)
+        if (batch * rowsPerBatch >= count)
         {
             Msg("ICSM_NET_INVENTORY confirmed generation=%d rows=%d\n", generation, count);
             Clear();
@@ -64,17 +71,17 @@ public:
     void Update(float) OVERRIDE
     {
         if ((!dirty && !pending) || !engine->IsInGame() || !gpGlobals ||
-            Plat_FloatTime() < nextSend || icsm_inventory_protocol.GetInt() != 1) return;
+            Plat_FloatTime() < nextSend || icsm_inventory_protocol.GetInt() < 1) return;
         INetChannelInfo *channel = engine->GetNetChannelInfo();
         if (!channel || channel->IsLoopback()) return;
         CCSPlayerInventory *inventory = CSInventoryManager()->GetLocalCSInventory();
         if (!inventory) return;
         if (!pending) Snapshot(inventory);
         KeyValues *message = new KeyValues("iCSMPrivateInventory");
-        message->SetInt("version", 1); message->SetInt("generation", generation);
+        message->SetInt("version", version); message->SetInt("generation", generation);
         message->SetInt("batch", batch); message->SetInt("count", count);
         KeyValues *entries = message->FindKey("entries", true);
-        for (int i = batch * 3; i < MIN(count, batch * 3 + 3); ++i)
+        for (int i = batch * rowsPerBatch; i < MIN(count, batch * rowsPerBatch + rowsPerBatch); ++i)
         {
             char key[24]; V_snprintf(key, sizeof(key), "%d", i);
             entries->AddSubKey(pending->FindKey(key)->MakeCopy());
@@ -95,6 +102,6 @@ static CICSMNetworkInventory icsmNetworkInventory;
 
 CON_COMMAND_F(icsm_inventory_ack, "Acknowledge a private inventory batch", FCVAR_RELEASE | FCVAR_SERVER_CAN_EXECUTE)
 {
-    if (args.ArgC() == 4 && engine->IsInGame() && icsm_inventory_protocol.GetInt() == 1)
+    if (args.ArgC() == 4 && engine->IsInGame() && icsm_inventory_protocol.GetInt() >= 1)
         icsmNetworkInventory.Acknowledge(atoi(args[1]), atoi(args[2]), atoi(args[3]));
 }

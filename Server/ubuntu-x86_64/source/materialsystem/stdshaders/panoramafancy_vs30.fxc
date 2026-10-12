@@ -1,0 +1,37 @@
+#include "common_vs_fxc.h"
+
+struct VS_INPUT
+{
+	float4 vPosition : POSITION;
+	float4 vTexcoordgradientcoord : TEXCOORD0;	// texcoord and position in gradient space (where length()=0 is color0, length()=1 is color1, values in between predictably linear interpolate, values outside are clamped)
+	float4 vColor0 : TEXCOORD1;	// gradient start color (stop position = 0.0)
+	float4 vColor1 : TEXCOORD2;	// gradient end color (stop position = 1.0)
+	float4 vOpacitytexcoord : TEXCOORD3;	// texcoord for opacitymask	
+	float4 vFragCoord_WdHt : TEXCOORD4;
+};
+
+struct VS_OUTPUT
+{
+	float4 vPosition : POSITION;
+	float4 vTexcoordgradientcoord : TEXCOORD0;
+	float4 vColor0 : TEXCOORD1;
+	float4 vColor1 : TEXCOORD2;
+	float4 vOpacitytexcoord : TEXCOORD3;
+    float4 vFragCoord_WdHt : TEXCOORD4;
+};
+
+VS_OUTPUT main( const VS_INPUT i )
+{
+	VS_OUTPUT o;
+
+	o.vPosition = i.vPosition;
+
+	o.vTexcoordgradientcoord = i.vTexcoordgradientcoord;
+	o.vColor0 = i.vColor0;
+	o.vColor1 = i.vColor1;
+	o.vFragCoord_WdHt = i.vFragCoord_WdHt;
+	o.vOpacitytexcoord = i.vOpacitytexcoord;
+
+	return o;
+}
+

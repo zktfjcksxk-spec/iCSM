@@ -1,0 +1,53 @@
+{
+  "source_commit": "a4c7aaea259319aca272839f688a3f4d9fe1cb2c",
+  "dependencies": [
+    {
+      "id": "kisak",
+      "url": "https://codeload.github.com/tyabus/Kisak-Strike/tar.gz/0cdcdd7585d8211471d8e1711748e04504d06daf",
+      "archive_sha256": "be6e133c817582517c4a8ffabe2ef8e1b762f8a79e88f2503a49677dcb1ae3f5"
+    },
+    {
+      "id": "gns",
+      "url": "https://codeload.github.com/ValveSoftware/GameNetworkingSockets/tar.gz/65f529731bcfcb618712eecf2e93dd41b549d0dc",
+      "archive_sha256": "8163bc4e9f19fed8e92dc751f469d4f12a824c2eee9b4eca7ffb7cd16ca3415a"
+    },
+    {
+      "id": "protobuf",
+      "url": "https://codeload.github.com/protocolbuffers/protobuf/tar.gz/774d630bde574f5fcbb6dae6eaa0f91f7bc12967",
+      "archive_sha256": "ea2c23366a4d58b7d6b90fdb103a02f242922b1e7a8cb45e64d77771ac23f974"
+    },
+    {
+      "id": "ivp",
+      "url": "https://codeload.github.com/tyabus/kisak-physics/tar.gz/580ee1e64e347aeb63f4dc40825148901b5692a9",
+      "archive_sha256": "a362ca31d5cfc6154c057f43d3b3bbfb33e4bec4e4b82fd9e885e39e02f17c50"
+    }
+  ],
+  "generated_sources_sha256": {
+    "netmessages.pb.cc": "eac39bf1143ca976789cfd169753d6c37b4c769f0ba0c62296de8080cd84628c",
+    "steamnetworkingsockets_messages_udp.pb.cc": "5ff5a2dda66cbc540c76a988d4a2d95e6cb85788804edeca276bfbaacd55e31b",
+    "base_gcmessages.pb.h": "608294773c12d079f6b606ee85968afe57b1dabb960e8285e4f70a558e015c11",
+    "cstrike15_gcmessages.pb.cc": "05a912e8a091258fa7f9209fb891a0161b921f569df76d0a400a277375e92f9e",
+    "network_connection.pb.h": "dade590bf9274aa89d92bbed3cc8b0eebc349583c55da68a0b53254e24afb48d",
+    "base_gcmessages.pb.cc": "06f212670efc0614e173e429ab8caa161fd801e80c01f5bdd549de1da6afe3e2",
+    "cstrike15_gcmessages.pb.h": "5122cac9a8c4a5a2badb7fefc6f65d891f1bfacbc606e362176f9b7594b26218",
+    "netmessages.pb.h": "5703dae4e01a7737cc70040fe00827ad4f129be5794773d7207a2e0a1a53c646",
+    "steamnetworkingsockets_messages_udp.pb.h": "515ee19325c153f70469865bfc73e66abfe1ddc34602825705925fee7d619bc3",
+    "network_connection.pb.cc": "09c4760262ed0f6e80c23d1c30ee183faf21c5fa2e4c0465953ea270d83a73d3",
+    "steamnetworkingsockets_messages.pb.h": "57e2ae836e03557e6b658b5550a51c1880809c893de8ac4aaf429ab1331d2fcc",
+    "steammessages.pb.cc": "0d344f4dbf3295645f4fc1e67ecf5130467cd555011f204afd84ffd1923bd75c",
+    "steamnetworkingsockets_messages_certs.pb.cc": "70f7f9b6ad234cce2cca0cc6d853429bc539a68f647b3e8dff61ae172142edd1",
+    "steamnetworkingsockets_messages_certs.pb.h": "543bf3c77fad64b99839a92cd1887886919e986713c29c2721933bb8855ac76e",
+    "steamnetworkingsockets_messages.pb.cc": "6ed5d10986efba6accacc40ccd3b60991f71eb37e39bcdf3834e3245d0440496",
+    "cstrike15_usermessages.pb.cc": "a7aa7ea5a184ea3f36b8ea7a8523271c9612b41c61c8cc36005ae8c6b0b6b912",
+    "engine_gcmessages.pb.h": "06483883bb3bbdef6529e6cecacdad0382ad003283194d72be2adfce3d795b3f",
+    "engine_gcmessages.pb.cc": "78bf6ef3ed00abafc748b52aaad4aab5a489b217ccbdb3c4b4a128ef911860de",
+    "cstrike15_usermessages.pb.h": "553e026977bf5fd3dc97de9278f52a7d07434dd2f3b7627ec47ca44e2925f9b4",
+    "steammessages.pb.h": "ff729201128a58aba1f40ef02870bded94b846864bdcdde35a417fa8adc62191"
+  },
+  "client_build": 200,
+  "sdl_headers": {
+    "version": "2.32.10",
+    "source": "https://github.com/libsdl-org/SDL/tree/release-2.32.10",
+    "archive_sha256": "03f9d7c191a837525c9cda6406af2f2e48be02b5e7eb03d949cc9f1e9ca41c8b"
+  }
+}

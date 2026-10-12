@@ -1,0 +1,301 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+// STATIC: "WORLDSPACETINTTEXTURE"		"0..0" [vs20]
+// STATIC: "WORLDSPACETINTTEXTURE"		"0..1" [vs30]
+// STATIC: "WORLDSPACETYPETEXTURE"		"0..0" [vs20]
+// STATIC: "WORLDSPACETYPETEXTURE"		"0..1" [vs30]
+// STATIC: "WORLDSPACEBURNTEXTURE"		"0..0" [vs20]
+// STATIC: "WORLDSPACEBURNTEXTURE"		"0..1" [vs30]
+// STATIC: "WORLDSPACEZONETEXTURE"		"0..0" [vs20]
+// STATIC: "WORLDSPACEZONETEXTURE"		"0..1" [vs30]
+
+// DYNAMIC:	"DZONE"				"0..1"
+// DYNAMIC:	"NEARBYPLAYERS"		"0..6"
+
+#include "common_fog_vs_fxc.h"
+#include "common_vs_fxc.h"
+
+const float4 vConst0						: register(SHADER_SPECIFIC_CONST_0);
+#define g_time vConst0.x
+#define g_scale vConst0.y
+#define g_minimumSpriteSize vConst0.w
+
+const float4 vConst1						: register(SHADER_SPECIFIC_CONST_1);
+#define g_worldOffset vConst1.xy
+#define g_worldScale vConst1.zw
+
+const float4 vConst3						: register(SHADER_SPECIFIC_CONST_3);
+#define g_dzCenter vConst3.xyz
+#define g_dzRadius vConst3.w
+
+
+// -------------------------------------------
+#if ( NEARBYPLAYERS > 0 )
+#define g_flProxCrushMax 95.0f
+#define g_flProxCrushMin -5.0f
+const float4 vConst2						: register(SHADER_SPECIFIC_CONST_4);
+#define g_vPlayer0pos vConst2.xyz
+#define g_vPlayer0amt vConst2.w
+#endif
+#if ( NEARBYPLAYERS > 1 )
+const float4 vConst4						: register(SHADER_SPECIFIC_CONST_5);
+#define g_vPlayer1pos vConst4.xyz
+#define g_vPlayer1amt vConst4.w
+#endif
+#if ( NEARBYPLAYERS > 2 )
+const float4 vConst5						: register(SHADER_SPECIFIC_CONST_6);
+#define g_vPlayer2pos vConst5.xyz
+#define g_vPlayer2amt vConst5.w
+#endif
+#if ( NEARBYPLAYERS > 3 )
+const float4 vConst6						: register(SHADER_SPECIFIC_CONST_10);
+#define g_vPlayer3pos vConst6.xyz
+#define g_vPlayer3amt vConst6.w
+#endif
+#if ( NEARBYPLAYERS > 4 )
+const float4 vConst10						: register(SHADER_SPECIFIC_CONST_12);
+#define g_vPlayer4pos vConst10.xyz
+#define g_vPlayer4amt vConst10.w
+#endif
+#if ( NEARBYPLAYERS > 5 )
+const float4 vConst11						: register(c217); // VERTEX_SHADER_SHADER_SPECIFIC_CONST_13
+#define g_vPlayer5pos vConst11.xyz
+#define g_vPlayer5amt vConst11.w
+#endif
+// -------------------------------------------
+
+#if ( WORLDSPACETINTTEXTURE == 1 )
+	sampler2D TexSampler	: register( s0 );
+#endif
+
+#if ( WORLDSPACETYPETEXTURE == 1 )
+	sampler2D TexSampler1	: register( s1 );
+#endif
+
+#if ( WORLDSPACEBURNTEXTURE == 1 )
+	sampler2D TexSampler2	: register( s2 );
+#endif
+
+#if ( WORLDSPACEZONETEXTURE == 1 )
+	sampler2D TexSampler3	: register( s3 );
+#endif
+
+static const int g_FogType			= DOWATERFOG;
+
+struct VS_INPUT
+{
+	float4 vPos				: POSITION;
+	float4 vColor			: COLOR0;
+	float4 vTexCoord0		: TEXCOORD0;
+	//float4 vTexCoord1		: TEXCOORD1;
+};
+
+struct VS_OUTPUT
+{
+    float4 projPos					: POSITION;			// Projection-space position
+	float2 baseTexCoord				: TEXCOORD0;		// Base texture coordinate
+	float4 color					: TEXCOORD2;		// Vertex color
+	float4 tint						: TEXCOORD5;		// tint
+	float4 diffuselight				: TEXCOORD6;		// (from lighting or unlit)
+	
+#if ( WORLDSPACETYPETEXTURE == 1 )
+	float4 data						: TEXCOORD3;
+#endif
+
+	float4 sway						: TEXCOORD4;
+
+#if !defined( _X360 ) && !defined( SHADER_MODEL_VS_3_0 )
+	float  fog		: FOG;
+#endif
+
+	float4 worldPos_projPosZ		: TEXCOORD7;		// Necessary for pixel fog
+};
+
+float GetLum(float3 color)
+{
+   return dot(color, float3(0.3f,0.59f,0.11f));
+}
+
+VS_OUTPUT main( const VS_INPUT v )
+{
+	VS_OUTPUT o = ( VS_OUTPUT )0;
+
+	float3 worldPoint = mul( v.vPos, cModel[0] );
+	float3 worldPos = worldPoint;
+	
+	#if ( WORLDSPACETINTTEXTURE == 1 || WORLDSPACETYPETEXTURE == 1 || WORLDSPACEBURNTEXTURE == 1 || WORLDSPACEZONETEXTURE == 1 )
+		float2 vWorldSpaceUV = (worldPoint.xy + g_worldOffset) * g_worldScale;
+		vWorldSpaceUV.y = 1.0 - vWorldSpaceUV.y;
+	#endif
+	
+	#if ( WORLDSPACETYPETEXTURE == 1 )
+		float4 vDataLookupMap = tex2Dlod( TexSampler1, float4( vWorldSpaceUV, 0, 0 ) );
+		o.data = vDataLookupMap;
+	#endif
+	
+	float3 up = float3(0,0,1);
+	float3 defl = float3(0,0,1);
+	
+// -------------------------------------------
+	float flPlayerProximityAmt = 1.0f;
+	#if ( NEARBYPLAYERS > 0 )
+	float3 vDir = g_vPlayer0pos - worldPos;
+	float flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = flThisPl;
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer0amt);
+	#endif
+	#if ( NEARBYPLAYERS > 1 )
+	vDir = g_vPlayer1pos - worldPos;
+	flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = min( flPlayerProximityAmt, flThisPl );
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer1amt);
+	#endif
+	#if ( NEARBYPLAYERS > 2 )
+	vDir = g_vPlayer2pos - worldPos;
+	flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = min( flPlayerProximityAmt, flThisPl );
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer2amt);
+	#endif
+	#if ( NEARBYPLAYERS > 3 )
+	vDir = g_vPlayer3pos - worldPos;
+	flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = min( flPlayerProximityAmt, flThisPl );
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer3amt);
+	#endif
+	#if ( NEARBYPLAYERS > 4 )
+	vDir = g_vPlayer4pos - worldPos;
+	flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = min( flPlayerProximityAmt, flThisPl );
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer4amt);
+	#endif
+	#if ( NEARBYPLAYERS > 5 )
+	vDir = g_vPlayer5pos - worldPos;
+	flThisPl = smoothstep( g_flProxCrushMin, g_flProxCrushMax, length( vDir ) );
+	flPlayerProximityAmt = min( flPlayerProximityAmt, flThisPl );
+	defl -= (normalize(vDir) * (1.0f - flThisPl) * g_vPlayer5amt);
+	#endif
+	
+	#if ( NEARBYPLAYERS > 0 )
+	up = lerp( defl, up, flPlayerProximityAmt );
+	#endif
+	
+// -------------------------------------------
+	
+	
+	float3 v2p = worldPos - cEyePos;
+	float l = length(v2p);
+	float3 v2pN = normalize(v2p);
+	
+	float3 right = normalize(cross(up, v2pN));
+	
+	float flFakeRise = smoothstep( 300, 2000, cEyePos.z - worldPos.z );
+	up = lerp( up, normalize( cross(v2pN,right) ), flFakeRise );
+	worldPos -= v2pN * flFakeRise * 20.0f;
+	
+	float flScale = 0.95f * g_scale + smoothstep( 1000, 3000, l ) * 0.2f;
+	
+	#if ( WORLDSPACETYPETEXTURE == 1 )
+		flScale *= (vDataLookupMap.g * 2.0f); // scale channel
+	#endif
+	
+	#if ( WORLDSPACEBURNTEXTURE == 1 )
+		float4 vBurnData = tex2Dlod( TexSampler2, float4( vWorldSpaceUV, 0, 0 ) );
+		float flBurnAmount = smoothstep( 1.0, 0.0, vBurnData.r );
+		
+		float flBurnScaleMultiplier = lerp( 0.8, 1.0, flBurnAmount );
+		flScale *= flBurnScaleMultiplier;
+	#endif
+
+	#if ( WORLDSPACEZONETEXTURE == 1 )
+		float4 vZoneData = tex2Dlod( TexSampler3, float4( vWorldSpaceUV, 0, 0 ) );
+		float flZoneBurn = smoothstep( 0.12, 0.0, vZoneData.r );
+	#endif
+
+	float flCrush = smoothstep( 20, 60, l );
+
+	
+	//#if ( NEARBYPLAYERS > 0 )
+	//flCrush *= flPlayerProximityAmt;	
+	//#endif
+	
+	#if ( DZONE == 1 )
+		float flDzone = smoothstep( g_dzRadius + 130, g_dzRadius - 170, length( worldPos.xy - g_dzCenter.xy ) );
+		flScale *= lerp( 0.8, 1.0, flDzone );
+	#endif
+	
+	// check if this sprite is below the minimum sprite size threshold
+	float2 vSpriteXY = v.vTexCoord0.zw;
+	if ( abs( vSpriteXY.y * flScale ) < g_minimumSpriteSize )
+	{
+		vSpriteXY.y = 0; // zero height sprite
+	}
+
+	float flZscale = (vSpriteXY.y * -0.01f);
+	float g_time_lagged1 = g_time - 0.33f;
+	float g_time_lagged2 = g_time - 6.67f;
+
+	float flRipple = 1.6f * flZscale * (sin( g_time + worldPos.x ) + sin( 2 * g_time + worldPos.y ));
+	float flRippleSecondary = 1.6f * flZscale * (sin( ( g_time_lagged1 * 3.0f ) + worldPos.x ) + sin( 2 * ( g_time_lagged1 * 4.0f ) + worldPos.y ));
+	float flRippleTertiary = 1.6f * flZscale * (sin( ( g_time_lagged2 * 6.0f ) + worldPos.x ) + sin( 2 * ( g_time_lagged2 * 5.0f ) + worldPos.y ));
+	worldPos -= right * flRipple;
+	
+	worldPos -= up * vSpriteXY.y * flScale * flCrush;
+	worldPos -= right * vSpriteXY.x * flScale;
+
+	float flWind = flZscale * (sin( g_time + worldPos.x * 0.005f ) + sin(  1.5f * g_time + worldPos.y * 0.003f ));
+
+	float flWindSecondary = flZscale * (sin( g_time_lagged1 ) + worldPos.x * 0.003f ) + sin(  1.5f * ( g_time_lagged1 ) + worldPos.y * 0.007f );
+	float flWindTertiary = flZscale * (sin( g_time_lagged2 ) + worldPos.x * 0.003f ) + sin(  1.5f * ( g_time_lagged2 ) + worldPos.y * 0.007f );
+	o.sway = float4( flRippleSecondary * 0.5f - flWindSecondary, flRippleTertiary * 0.6f - flWindTertiary, flRippleTertiary * 0.4f + flWindTertiary, flRippleSecondary * 0.7f - flWindSecondary ) * 0.0012f;
+	worldPos -= flWind * 0.4f;
+	
+	// Transform into projection space
+	o.projPos = mul( float4( worldPos, 1 ), cViewProj );
+	o.worldPos_projPosZ = float4( worldPos, o.projPos.z );
+	
+#if !defined( _X360 ) && !defined( SHADER_MODEL_VS_3_0 )
+	o.fog = CalcFixedFunctionFog( worldPos, g_FogType );
+#endif
+	
+	#if ( WORLDSPACETINTTEXTURE == 1 )
+		o.tint.rgba = float4( tex2Dlod( TexSampler, float4( vWorldSpaceUV, 0, 0 ) ).rgb, 1.0f );
+	#else
+		o.tint.rgba = float4( 1.0f, 1.0f, 1.0f, 0.0f );
+	#endif
+
+	o.color.rgb = float3( 1.0f, 1.0f, 1.0f );
+	
+	o.color.a = lerp( 1.0, 0.5, smoothstep( 800, 1700, l ) );
+	
+	#if ( DZONE == 1 )
+		o.color.r += (1.0f - flDzone);
+		o.color.r *= flDzone;
+		o.color.gba *= flDzone * flDzone;
+	#endif
+	
+	#if ( NEARBYPLAYERS > 0 )
+		o.color.a *= lerp( 0.2, 1.0, flPlayerProximityAmt );
+	#endif
+
+	#if ( WORLDSPACEBURNTEXTURE == 1 )
+		float flBurnTint = lerp( 0.1f, 1.0f, flBurnAmount );
+		o.color.gb *= pow( flBurnTint, 1.2f );
+		o.color.r *= flBurnTint;
+		o.color.a *= flBurnAmount;
+	#endif
+	
+	#if ( WORLDSPACEZONETEXTURE == 1 )
+		o.color.a *= flZoneBurn;
+	#endif
+	
+	// Base texture coordinates
+	o.baseTexCoord.xy = v.vTexCoord0.xy;
+
+	o.diffuselight.rgb = SrgbGammaToLinear( v.vColor.rgb );
+	// HACK HACK HACK Remove this once VRAD applies the correct alpha value for sun coverage
+	o.diffuselight.a = smoothstep( 0.75f, 0.65f, GetLum( v.vColor.rgb ) );
+
+	return o;
+}
+
+

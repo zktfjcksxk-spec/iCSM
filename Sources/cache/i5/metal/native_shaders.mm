@@ -1,4 +1,5 @@
 #include "native_objects.h"
+#include "shader_shadow_policy.h"
 #import <CommonCrypto/CommonDigest.h>
 #include <cstdio>
 #include <regex>
@@ -18,25 +19,8 @@ static unsigned bytecodeSize(const DWORD *p) {
     }
     fatal("shader bytecode", @"unterminated or oversized shader"); return 0;
 }
-static unsigned shadowMask(const char *name, unsigned declared) {
-    // Exact Source mask selection from dxabstract.cpp, including the
-    // character shader's exclusive sampler rule in dx9asmtogl2.cpp.
-    if (!name) return 0;
-    struct Entry { const char *name; unsigned mask; };
-    static const Entry entries[]={
-        {"water_ps",1<<7},{"infected_ps",1<<1},{"phong_ps",(1<<4)|(1<<15)},
-        {"vertexlit_and_unlit_generic_bump_ps",(1<<8)|(1<<15)},
-        {"vertexlit_and_unlit_generic_ps",(1<<8)|(1<<15)},
-        {"eye_refract_ps",1<<6},{"eyes_flashlight_ps",1<<4},
-        {"worldtwotextureblend_ps",1<<7},{"teeth_flashlight_ps",1<<2},
-        {"flashlight_ps",1<<7},{"lightmappedgeneric_ps",1<<15},
-        {"character_ps",(1<<8)|(1<<11)}};
-    for (const auto &e:entries) if (V_stristr(name,e.name)) {
-        unsigned mask=e.mask;
-        if (!strcmp(e.name,"character_ps") && (declared&(1<<11))) mask=1<<11;
-        return mask & declared;
-    }
-    return 0;
+static unsigned shadowMask(const char *name, unsigned declared2D) {
+    return shaderShadowMask(name,declared2D);
 }
 static std::string sourceCompatibleMSL(const DWORD *code, const MOJOSHADER_parseData &p,
     const char *name, const uint32 *centroid, const std::vector<std::string> &centroidDecls) {
@@ -47,9 +31,10 @@ static std::string sourceCompatibleMSL(const DWORD *code, const MOJOSHADER_parse
     // preserve the generated register mapping and remove only that terminator.
     text=std::regex_replace(text, std::regex("(#define [cib][0-9]+ [^\\n;]+\\[[0-9]+\\]);"), "$1");
     if (p.shader_type==MOJOSHADER_TYPE_PIXEL) {
-        unsigned declared=0;
-        for (int i=0;i<p.sampler_count;++i) declared|=1u<<p.samplers[i].index;
-        const unsigned mask=shadowMask(name,declared);
+        unsigned declared2D=0;
+        for (int i=0;i<p.sampler_count;++i)
+            if(p.samplers[i].type==MOJOSHADER_SAMPLER_2D)declared2D|=1u<<p.samplers[i].index;
+        const unsigned mask=shadowMask(name,declared2D);
         // Recover every TEX/TEXLDL source swizzle from the original tokens.
         // Source treats shadow TEXLDP as an unprojected xyz depth comparison.
         struct Sample { unsigned sampler; std::string reg, xyz, lod; unsigned op; };
@@ -196,6 +181,15 @@ std::unique_ptr<Shader> newShader(const DWORD *code,const char *name,const char 
         const unsigned slot=s->parsed->samplers[i].index;
         if(s->msl.find("depth2d<float> s"+std::to_string(slot)+"_texture")!=std::string::npos)s->shadowSamplerMask|=1u<<slot;
     }
+    s->vertex=s->parsed->shader_type==MOJOSHADER_TYPE_VERTEX;
+    s->vertexAttribMap.fill(0xff);
+    if(s->vertex)for(int i=0;i<s->parsed->attribute_count;++i) {
+        const auto& a=s->parsed->attributes[i];unsigned reg;
+        if(sscanf(a.name,"v%u",&reg)!=1 || reg>=16)fatal("vertex attribute",@(a.name));
+        s->vertexAttribMap[reg]=(a.usage<<4)|a.index;s->maxVertexAttrs=std::max(s->maxVertexAttrs,reg+1);
+        s->attributes.push_back({reg,int(a.usage),a.index});
+    }
+    for(int i=0;i<s->parsed->sampler_count;++i)s->samplerSlots.push_back(s->parsed->samplers[i].index);
     s->hasColor=s->msl.find("float4 oC0 [[color(0)]]")!=std::string::npos;
     for (int i=0;i<s->parsed->uniform_count;++i) {
         const auto &u=s->parsed->uniforms[i]; if (u.constant) continue;
@@ -249,6 +243,13 @@ std::unique_ptr<Shader> newShader(const DWORD *code,const char *name,const char 
     NSData *metadataBytes=[NSJSONSerialization dataWithJSONObject:metadata options:NSJSONWritingPrettyPrinted error:&error];
     [metadataBytes writeToFile:[path stringByAppendingString:@".shader.json"] atomically:YES];
 
+    // Uniform packing uses type/index/count only. Names point into parseData;
+    // clear those pointers before freeing the compiler's output and metadata.
+    for(auto& uniform:s->uniforms)uniform.name=nullptr;
+    shaderCacheReleasedTextBytes+=s->msl.capacity()+std::max(0,s->parsed->output_len);
+    ++shaderCacheCompactedShaders;
+    MOJOSHADER_freeParseData(s->parsed);s->parsed=nullptr;
+    std::string().swap(s->msl);
     return s;
     } // autoreleasepool
 }
@@ -257,7 +258,7 @@ void packUniforms(const Shader &shader,const State &s,std::vector<uint8_t> &data
     data.resize((bytes+15)&~15u);
     std::fill(data.begin(),data.end(),0);
     unsigned f=0,i=16*shader.floatCount,b=i+16*shader.intCount;
-    bool vertex=shader.parsed->shader_type==MOJOSHADER_TYPE_VERTEX;
+    bool vertex=shader.vertex;
     for (const auto &u:shader.uniforms) {
         unsigned count=std::max(1,u.array_count);
         if (u.type==MOJOSHADER_UNIFORM_FLOAT) {

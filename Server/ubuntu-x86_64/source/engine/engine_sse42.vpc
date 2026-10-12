@@ -1,0 +1,45 @@
+//-----------------------------------------------------------------------------
+//	ENGINE.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$macro SRCDIR		".."
+$Macro OUTBINDIR	"$SRCDIR\..\game\bin"
+
+$include "$SRCDIR\vpc_scripts\source_lib_base.vpc" 
+
+$Configuration
+{
+	$Compiler
+	{
+		$AdditionalIncludeDirectories	"$BASE;$ESRCDIR\;$ESRCDIR\audio;$ESRCDIR\audio\private;$ESRCDIR\audio\private\snd_op_sys;$ESRCDIR\audio\public;$SRCDIR\thirdparty\quickhull"
+		$AdditionalIncludeDirectories	"$BASE;$SRCDIR\dx9sdk\include" [$WINDOWS]
+		$AdditionalIncludeDirectories	"$BASE;$GENERATED_PROTO_DIR" [$PANORAMA_ENABLE]
+		$PreprocessorDefinitions	"$BASE;$EXTRADEFINES;USE_CONVARS;VOICE_OVER_IP;BUMPMAP;__USEA3D;_ADD_EAX_;ENGINE_DLL;VERSION_SAFE_STEAM_API_INTERFACES;PROTECTED_THINGS_ENABLE;USE_BREAKPAD_HANDLER" 
+		$PreprocessorDefinitions	"$BASE;$EXTRADEFINES;fopen=dont_use_fopen" [!$POSIX&&!$PS3]
+		$PreprocessorDefinitions	"$BASE;DEDICATED;SWDS;NO_BINK" [$DEDICATED]
+		$PreprocessorDefinitions	"$BASE;INCLUDE_SCALEFORM" [!$DEDICATED]
+
+		$PreprocessorDefinitions	"$BASE;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA" [$PANORAMA_ENABLE]
+	}
+
+	$Compiler [$WIN32] // This is already enabled for WIN64.
+	{
+		$EnableEnhancedInstructionSet	"Streaming SIMD Extensions 2 (/arch:SSE2)"
+	}
+
+	$Compiler [$OSXALL]
+	{
+		$GCC_ExtraCompilerFlags			"$BASE -msse4.2"
+	}
+	$Compiler [$LINUXALL]
+	{
+		$GCC_ExtraCompilerFlags			"$BASE -msse4.2"
+	}
+}
+
+$Project engine_sse42
+{
+		$File	"$SRCDIR\engine\networkstringtable_sse42.cpp"	
+}

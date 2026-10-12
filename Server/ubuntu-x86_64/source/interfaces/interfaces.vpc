@@ -1,0 +1,30 @@
+//-----------------------------------------------------------------------------
+//	worldrenderer.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR		".."
+$include "$SRCDIR\vpc_scripts\source_lib_base.vpc"
+
+
+$Configuration
+{
+	$Compiler
+	{
+		$PreprocessorDefinitions	"$BASE;SOURCE2_PANORAMA_FIXME;SOURCE2_PANORAMA" [$PANORAMA_ENABLE]
+	}
+}
+
+$Project "interfaces"
+{
+	$Folder	"Source Files"
+	{
+		$File	"interfaces.cpp"
+	}
+	
+	$Folder	"Public Header Files"
+	{
+		$File	"$SRCDIR\public\interfaces\interfaces.h"
+	}
+}

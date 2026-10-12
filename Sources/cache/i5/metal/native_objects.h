@@ -84,6 +84,12 @@ struct Shader : Object {
     unsigned floatCount = 0, intCount = 0, boolCount = 0;
     std::vector<MOJOSHADER_uniform> uniforms;
     bool hasColor = false;
+    bool vertex = false;
+    unsigned maxVertexAttrs = 0;
+    std::array<unsigned char,16> vertexAttribMap{};
+    std::vector<unsigned> samplerSlots;
+    struct Attribute { unsigned reg; int usage,index; };
+    std::vector<Attribute> attributes;
     ~Shader() override { MOJOSHADER_freeParseData(parsed); }
 };
 struct Query : Object {

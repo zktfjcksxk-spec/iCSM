@@ -1,0 +1,32 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+const float4 g_Const0 : register( c0 );
+const float4 g_Const1 : register( c1 );
+const float4 g_Const2 : register( c2 );
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+float ZoneDist( float2 uv, float2 origin, float flInvR, float flRatio )
+{
+	if ( flInvR <= 0 )
+	{
+		return 0;
+	}
+	
+	return ( 1.0 - ( length( uv - origin ) * flInvR ) ) * flRatio;
+}
+
+float4 main( PS_INPUT i ) : COLOR
+{
+	return float4(
+		ZoneDist( i.vBaseUV, g_Const0.xy, g_Const0.z, g_Const0.w ),
+		ZoneDist( i.vBaseUV, g_Const1.xy, g_Const1.z, g_Const1.w ),
+		ZoneDist( i.vBaseUV, g_Const2.xy, g_Const2.z, g_Const2.w ),
+		1 );
+}
+

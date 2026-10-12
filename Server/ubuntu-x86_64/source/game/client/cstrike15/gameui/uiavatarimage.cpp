@@ -1,0 +1,121 @@
+//========= Copyright © 1996-2008, Valve Corporation, All rights reserved. ============//
+//
+// Purpose: 
+//
+//=====================================================================================//
+
+#include "cbase.h"
+#include "uigamedata.h"
+#include "uiavatarimage.h"
+#include "engineinterface.h"
+#include "vgui/ISurface.h"
+
+#ifndef _GAMECONSOLE
+#include "steam/steam_api.h"
+#endif
+
+#ifndef _GAMECONSOLE
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+CGameUiAvatarImage::CGameUiAvatarImage( void )
+{
+	m_bValid = false;
+	m_flFetchedTime = 0.0f;
+	m_iTextureID = ( -1 );
+}
+
+void CGameUiAvatarImage::ClearAvatarSteamID( void )
+{
+	m_bValid = false;
+	m_flFetchedTime = 0.0f;
+}
+
+#if !defined ( PANORAMA_ENABLE )
+// HACK: This feature is only in panorama, but adding convar here so the convar exists in client scaleform builds
+ConVar cl_hide_avatar_images( "cl_hide_avatar_images", 0, FCVAR_ARCHIVE, "Hide avatar images for other players. \n\t0 - Off.\n\t1 - Block All\n\t2 - Block all but friends" );
+#endif
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CGameUiAvatarImage::SetAvatarSteamID( CSteamID steamIDUser )
+{
+	ClearAvatarSteamID();
+
+	if ( steamapicontext->SteamFriends() && steamapicontext->SteamUtils() )
+	{
+		int iAvatar = steamapicontext->SteamFriends()->GetMediumFriendAvatar( steamIDUser );
+
+		/*
+		// See if it's in our list already
+		*/
+
+		uint32 wide, tall;
+		if ( steamapicontext->SteamUtils()->GetImageSize( iAvatar, &wide, &tall ) )
+		{
+			bool bUseSteamImage = true;
+			if ( wide == 0 || tall == 0 )
+			{
+				// attempt to handle rare data integrity issue, avatar got lost
+				bUseSteamImage = false;
+				// mock up solid white as 64x64
+				wide = tall = 64;
+			}			
+
+			int cubImage = wide * tall * 4;
+			byte *rgubDest = (byte*)_alloca( cubImage );
+			if ( bUseSteamImage )
+			{
+				steamapicontext->SteamUtils()->GetImageRGBA( iAvatar, rgubDest, cubImage );
+			}
+			else
+			{
+				// solid white, avoids any issue with where the alpha channel is
+				memset( rgubDest, 0xFF, cubImage );
+			}
+			InitFromRGBA( rgubDest, wide, tall );
+
+			m_flFetchedTime = Plat_FloatTime();
+		}
+	}
+
+	return m_bValid;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CGameUiAvatarImage::InitFromRGBA( const byte *rgba, int width, int height )
+{
+	if ( m_iTextureID == -1 )
+	{
+		m_iTextureID = vgui::surface()->CreateNewTextureID( true );
+	}
+
+	vgui::surface()->DrawSetTextureRGBA( m_iTextureID, rgba, width, height );
+
+	int screenWide, screenTall;
+	vgui::surface()->GetScreenSize( screenWide, screenTall );
+	m_nWide = width * ( ( (float) screenWide ) / 640.0f );
+	m_nTall = height * ( ( (float) screenTall ) / 480.0f );
+	m_Color = Color( 255, 255, 255, 255 );
+
+	m_bValid = true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CGameUiAvatarImage::Paint( void )
+{
+	if ( m_bValid )
+	{
+		vgui::surface()->DrawSetColor( m_Color );
+		vgui::surface()->DrawSetTexture( m_iTextureID );
+		vgui::surface()->DrawTexturedRect( m_nX, m_nY, m_nX + m_nWide, m_nY + m_nTall );
+	}
+}
+
+#endif // !_GAMECONSOLE

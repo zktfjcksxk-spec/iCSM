@@ -1,0 +1,60 @@
+//========== Copyright (c) Valve Corporation, All rights reserved. ==========//
+
+#include "common_ps_fxc.h"
+
+sampler Tex0Sampler : register( s0 );
+sampler Tex1Sampler : register( s1 );
+sampler Tex2Sampler : register( s2 );
+sampler Tex3Sampler : register( s3 );
+
+const float4 g_Const0 : register( c0 );
+
+struct PS_INPUT
+{
+	float2 vBaseUV : TEXCOORD0;
+};
+
+float SoftRange( float flSample, float flEdge1, float flEdge2, float flEdge3, float flEdge4 )
+{
+	return smoothstep( flEdge1, flEdge2, flSample ) * smoothstep( flEdge4, flEdge3, flSample );
+}
+
+float4 main( PS_INPUT i ) : COLOR
+{
+	float2 vUV = i.vBaseUV;
+	
+	float3 cZoneSample = tex2D(Tex0Sampler, vUV).rgb;
+	
+	// smooth prediction overlays
+	cZoneSample.gb += tex2D(Tex0Sampler, vUV + float2( 0.02,  0.01) ).gb;
+	cZoneSample.gb += tex2D(Tex0Sampler, vUV + float2(-0.01,  0.02) ).gb;
+	cZoneSample.gb += tex2D(Tex0Sampler, vUV + float2(-0.02, -0.01) ).gb;
+	cZoneSample.gb += tex2D(Tex0Sampler, vUV + float2( 0.01, -0.02) ).gb;
+	cZoneSample.gb *= 0.2;
+	
+	cZoneSample.r *= 0.9 + tex2D(Tex1Sampler, vUV * 10.0).r;
+	
+	float4 cOut = float4( 0, 0, 0, 0 );
+	
+	float4 cRedZone = tex2D(Tex2Sampler, float2( cZoneSample.r, 0.1 ));
+	float4 cPreview = tex2D(Tex2Sampler, float2( cZoneSample.g, 0.3 ));
+	float4 cUpgrade = tex2D(Tex2Sampler, float2( cZoneSample.b, 0.5 )) * g_Const0.x;
+	
+	float mapAlpha = tex2D(Tex3Sampler, vUV).a;
+	
+	cUpgrade *= smoothstep( 0.2, 0.35, mapAlpha ) * 1.25;
+	
+	float3 cPulse = tex2D(Tex2Sampler, float2( cZoneSample.g + g_Const0.y, 0.68 ));
+	cPreview.rgb += cPulse * 0.2;
+	cPreview.rgb *= 0.8;
+	
+	cOut = lerp( cUpgrade, cPreview, cPreview.a );
+	cOut = lerp( cOut, cRedZone, cRedZone.a );
+	
+	cOut.a = saturate( max( max( cUpgrade.a * 0.4, cPreview.a * 0.6 ), cRedZone.a * 0.85 ) );
+	
+	cOut.a *= saturate( mapAlpha * 4.0 );
+	
+	return cOut;
+}
+

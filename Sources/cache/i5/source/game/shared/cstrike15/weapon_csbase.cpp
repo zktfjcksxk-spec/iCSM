@@ -3967,7 +3967,19 @@ void CWeaponCSBase::OnLand( float fVelocity )
 
 void CWeaponCSBase::Recoil( CSWeaponMode weaponMode )
 {
-	/** Removed for partner depot **/
+    CCSPlayer *pPlayer = GetPlayerOwner();
+    if ( !pPlayer )
+        return;
+
+    // Restore the omitted call chain, following Kisak-Strike's retail rebuild:
+    // SwagSoftware/Kisak-Strike @ 74e082bf01fa81ee77413a5afa6db4466bed2025.
+    // Automatic guns follow their spray index; semi-auto guns use the shared
+    // prediction seed so client prediction and server simulation agree.
+    const int nRecoilIndex = IsFullAuto() ? int( m_flRecoilIndex ) : GetPredictionRandomSeed();
+    float flAngle, flMagnitude;
+    // This depot retains the schema-driven recoil table, not the legacy cache.
+    g_WeaponRecoilData.GetRecoilOffsets( this, weaponMode, nRecoilIndex, flAngle, flMagnitude );
+    pPlayer->KickBack( flAngle, flMagnitude );
 }
 
 #ifdef CLIENT_DLL

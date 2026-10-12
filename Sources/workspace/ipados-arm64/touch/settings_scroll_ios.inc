@@ -1,27 +1,43 @@
 /* Transparent UIKit input only. Panorama still draws/clips every setting
    and owns its vertical scrollbar. No blur, extra texture or render pass. */
+#include "settings_slider_policy.h"
 static SourceTouchSettingsState settingsScrollState={};
+static SourceTouchSettingsSliderTargets settingsSliderTargets={};
 static SourceTouchSettingsState settingsScrollAppliedState={};
 static CGSize settingsScrollAppliedHostSize=CGSizeZero;
 static bool settingsScrollLayoutApplied=false;
 static void (*settingsScrollCallback)(const char *,float)=nullptr;
+static void (*settingsSliderCallback)(const char *,const char *,float,bool)=nullptr;
 static uint64_t settingsScrollSamples=0,settingsScrollTaps=0,settingsSliderDrags=0,settingsScrollCancels=0;
+static uint64_t settingsSliderSamples=0,settingsSliderCommits=0;
+static std::string settingsLastSlider;
+static float settingsLastSliderFraction=0;
 
 enum SettingsTouchIntent { SettingsPending, SettingsVertical, SettingsHorizontalSlider, SettingsIgnore };
-static SettingsTouchIntent settingsTouchIntent(CGPoint delta,bool slider) {
-    if (std::max(std::abs(delta.x),std::abs(delta.y))<6) return SettingsPending;
-    if (std::abs(delta.y)>std::abs(delta.x)) return SettingsVertical;
-    return slider?SettingsHorizontalSlider:SettingsIgnore;
+static SettingsTouchIntent settingsTouchIntent(CGPoint delta,bool slider,SettingsTouchIntent previous=SettingsPending) {
+    return (SettingsTouchIntent)ICSMSettingsTouch::Classify(delta.x,delta.y,slider,(ICSMSettingsTouch::Intent)previous);
 }
-static bool settingsPointOnSlider(CGPoint point) {
+static bool settingsSliderAtPoint(CGPoint point,SourceTouchSettingsSlider &target,CGRect &track,CGFloat &thumbWidth) {
     if (!host || settingsScrollState.render_width<=0 || settingsScrollState.render_height<=0) return false;
     CGFloat sx=host.bounds.size.width/settingsScrollState.render_width;
     CGFloat sy=host.bounds.size.height/settingsScrollState.render_height;
-    for (uint32_t i=0;i<settingsScrollState.slider_count;++i) {
-        const auto &r=settingsScrollState.sliders[i];
-        if (CGRectContainsPoint(CGRectMake(r.x*sx,r.y*sy,r.width*sx,r.height*sy),point)) return true;
+    const auto &v=settingsScrollState.viewport;
+    if (!CGRectContainsPoint(CGRectMake(v.x*sx,v.y*sy,v.width*sx,v.height*sy),point)) return false;
+    for (uint32_t i=0;i<settingsSliderTargets.count;++i) {
+        const auto &slider=settingsSliderTargets.sliders[i];const auto &r=slider.hit_bounds;
+        if (ICSMSettingsTouch::Hit(point.x,point.y,r.x*sx,r.y*sy,r.width*sx,r.height*sy)) {
+            target=slider;const auto &t=slider.track_bounds;
+            track=CGRectMake(t.x*sx,t.y*sy,t.width*sx,t.height*sy);thumbWidth=slider.thumb_width*sx;return true;
+        }
     }
     return false;
+}
+static void settingsEmitSlider(const char *tab,const char *convar,float fraction,bool finished) {
+    if (!settingsSliderCallback || !std::isfinite(fraction)) return;
+    fraction=std::clamp(fraction,0.0f,1.0f);
+    ++settingsSliderSamples;if(finished)++settingsSliderCommits;
+    settingsLastSlider=convar;settingsLastSliderFraction=fraction;
+    settingsSliderCallback(tab,convar,fraction,finished);
 }
 
 @interface ICSMSettingsContent : UIView
@@ -30,8 +46,16 @@ static bool settingsPointOnSlider(CGPoint point) {
 @property(nonatomic) CGPoint origin;
 @property(nonatomic) CGFloat maxDistance;
 @property(nonatomic) BOOL startedOnSlider;
-@property(nonatomic) BOOL forwarded;
+@property(nonatomic) BOOL sliderDragging;
+@property(nonatomic) BOOL grabbedThumb;
+@property(nonatomic) SettingsTouchIntent intent;
+@property(nonatomic) SourceTouchSettingsSlider slider;
+@property(nonatomic) CGRect sliderTrack;
+@property(nonatomic) CGFloat sliderThumbWidth;
+@property(nonatomic) float lastFraction;
+@property(nonatomic,copy) NSString *sliderTab;
 -(void)cancelPending;
+-(void)changeSliderAtPoint:(CGPoint)point finished:(BOOL)finished;
 @end
 
 @interface ICSMSettingsScroll : UIScrollView <UIScrollViewDelegate>
@@ -49,23 +73,31 @@ static ICSMSettingsScroll *settingsScroll;
     if (touch.type==UITouchTypeIndirectPointer) return;
     self.primaryTouch=touch;self.pointerHost=host;
     self.origin=[touch locationInView:host];self.maxDistance=0;
-    self.startedOnSlider=settingsPointOnSlider(self.origin);self.forwarded=NO;
-    // Defer the SDL mouse-down. A vertical drag must never change a slider
-    // or activate a button, even after a long stationary touch-down.
+    SourceTouchSettingsSlider slider={};CGRect track=CGRectZero;CGFloat thumbWidth=0;
+    self.startedOnSlider=settingsSliderAtPoint(self.origin,slider,track,thumbWidth);
+    self.slider=slider;self.sliderTrack=track;self.sliderThumbWidth=thumbWidth;
+    self.lastFraction=slider.fraction;self.sliderTab=[NSString stringWithUTF8String:settingsScrollState.tab_id];
+    self.grabbedThumb=self.startedOnSlider && ICSMSettingsTouch::OnThumb(self.origin.x,track.origin.x,track.size.width,thumbWidth,slider.fraction);
+    self.sliderDragging=NO;self.intent=SettingsPending;
+    // Delay adjustment until a tap ends or horizontal intent is established.
+    // Vertical scrolling never generates a Source down or slider change.
+}
+-(void)changeSliderAtPoint:(CGPoint)p finished:(BOOL)finished {
+    SourceTouchSettingsSlider slider=self.slider;CGRect track=self.sliderTrack;
+    self.lastFraction=ICSMSettingsTouch::DragFraction(p.x,self.origin.x,track.origin.x,track.size.width,
+        self.sliderThumbWidth,slider.fraction,self.grabbedThumb);
+    settingsEmitSlider(self.sliderTab.UTF8String,slider.convar,self.lastFraction,finished);
 }
 -(void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
     UITouch *touch=self.primaryTouch;UIView *v=self.pointerHost;
     if (!touch || !v || ![touches containsObject:touch]) return;
     CGPoint p=[touch locationInView:v],delta=CGPointMake(p.x-self.origin.x,p.y-self.origin.y);
     self.maxDistance=std::max(self.maxDistance,std::hypot(delta.x,delta.y));
-    NSSet *one=[NSSet setWithObject:touch];
-    // UIScrollView has already rejected this horizontal gesture. Ownership
-    // stays with the Source slider until release, including diagonal jitter.
-    if (!self.forwarded && settingsTouchIntent(delta,self.startedOnSlider)==SettingsHorizontalSlider &&
-        (settingsScroll.panGestureRecognizer.state==UIGestureRecognizerStateFailed || !settingsScroll.scrollEnabled)) {
-        self.forwarded=YES;++settingsSliderDrags;[v touchesBegan:one withEvent:event];
+    self.intent=settingsTouchIntent(delta,self.startedOnSlider,self.intent);
+    if (self.intent==SettingsHorizontalSlider) {
+        if (!self.sliderDragging){self.sliderDragging=YES;++settingsSliderDrags;}
+        [self changeSliderAtPoint:p finished:NO];
     }
-    if (self.forwarded) [v touchesMoved:one withEvent:event];
 }
 -(void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
     UITouch *touch=self.primaryTouch;UIView *v=self.pointerHost;
@@ -73,24 +105,24 @@ static ICSMSettingsScroll *settingsScroll;
     CGPoint p=[touch locationInView:v];
     self.maxDistance=std::max(self.maxDistance,std::hypot(p.x-self.origin.x,p.y-self.origin.y));
     NSSet *one=[NSSet setWithObject:touch];
-    if (self.forwarded) [v touchesEnded:one withEvent:event];
-    else if (self.maxDistance<=8 && !settingsScroll.dragging && !settingsScroll.decelerating) {
+    if (self.sliderDragging) [self changeSliderAtPoint:p finished:YES];
+    else if (self.intent!=SettingsVertical && self.maxDistance<=8 && !settingsScroll.dragging && !settingsScroll.decelerating) {
         // Actual UITouch and original SDL coordinate conversion/Source input,
         // rather than synthesising a click or reimplementing widget actions.
-        ++settingsScrollTaps;[v touchesBegan:one withEvent:event];[v touchesEnded:one withEvent:event];
+        ++settingsScrollTaps;
+        if(self.startedOnSlider)[self changeSliderAtPoint:p finished:YES];
+        else {[v touchesBegan:one withEvent:event];[v touchesEnded:one withEvent:event];}
     }
-    self.primaryTouch=nil;self.pointerHost=nil;self.forwarded=NO;
+    self.primaryTouch=nil;self.pointerHost=nil;self.sliderDragging=NO;self.startedOnSlider=NO;self.intent=SettingsPending;
 }
 -(void)touchesCancelled:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
     if (self.primaryTouch && [touches containsObject:self.primaryTouch]) [self cancelPending];
 }
 -(void)cancelPending {
     if (!self.primaryTouch) return;
-    // Only a slider can have received a down event; cancelled vertical
-    // gestures have never entered SDL and cannot become an accidental tap.
-    if (self.forwarded && self.pointerHost)
-        [self.pointerHost touchesCancelled:[NSSet setWithObject:self.primaryTouch] withEvent:nil];
-    ++settingsScrollCancels;self.primaryTouch=nil;self.pointerHost=nil;self.forwarded=NO;
+    if(self.sliderDragging){SourceTouchSettingsSlider slider=self.slider;
+        settingsEmitSlider(self.sliderTab.UTF8String,slider.convar,self.lastFraction,true);}
+    ++settingsScrollCancels;self.primaryTouch=nil;self.pointerHost=nil;self.sliderDragging=NO;self.startedOnSlider=NO;self.intent=SettingsPending;
 }
 @end
 
@@ -114,6 +146,7 @@ static ICSMSettingsScroll *settingsScroll;
 }
 -(BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer*)recognizer {
     if (recognizer==self.panGestureRecognizer) {
+        if(self.pointerContent.intent==SettingsHorizontalSlider)return NO;
         CGPoint delta=[self.panGestureRecognizer translationInView:self];
         if (std::abs(delta.y)<=std::abs(delta.x)) return NO;
     }
@@ -184,21 +217,42 @@ static void updateSettingsScrollLayout() {
 
 static NSDictionary *settingsScrollDiagnostics() {
     CGRect f=settingsScroll.frame;
-    return @{@"backend":@"UIScrollView + original Panorama vertical scrollbar/SDL widgets",
+    NSMutableArray *targets=[NSMutableArray array];
+    for(uint32_t i=0;i<settingsSliderTargets.count;++i){const auto &s=settingsSliderTargets.sliders[i];
+        [targets addObject:@{@"convar":[NSString stringWithUTF8String:s.convar]?:@"",@"fraction":@(s.fraction),
+            @"track_pixels":@[@(s.track_bounds.x),@(s.track_bounds.y),@(s.track_bounds.width),@(s.track_bounds.height)],@"thumb_width_pixels":@(s.thumb_width)}];}
+    return @{@"backend":@"UIScrollView + finger tracks + original Panorama slider events",
         @"visible":@((bool)(settingsScroll && !settingsScroll.hidden)),@"tab":settingsScroll.tabID?:@"",
         @"viewport_points":@[@(f.origin.x),@(f.origin.y),@(f.size.width),@(f.size.height)],
         @"content_height_points":@(settingsScroll.contentSize.height),@"offset_points":@(settingsScroll.contentOffset.y),
         @"source_offset_pixels":@(settingsScrollState.scroll_offset),@"slider_count":@(settingsScrollState.slider_count),
+        @"slider_targets":targets,@"slider_samples":@(settingsSliderSamples),@"slider_commits":@(settingsSliderCommits),
+        @"last_slider":[NSString stringWithUTF8String:settingsLastSlider.c_str()]?:@"",@"last_slider_fraction":@(settingsLastSliderFraction),
         @"dragging":@(settingsScroll.dragging),@"decelerating":@(settingsScroll.decelerating),
         @"scroll_samples":@(settingsScrollSamples),@"taps":@(settingsScrollTaps),@"slider_drags":@(settingsSliderDrags),@"cancelled_content_touches":@(settingsScrollCancels)};
 }
 static void shutdownSettingsScroll() {
-    std::lock_guard<std::recursive_mutex> lock(mutex);settingsScrollCallback=nullptr;settingsScrollState={};settingsScrollLayoutApplied=false;
+    std::lock_guard<std::recursive_mutex> lock(mutex);settingsScrollCallback=nullptr;settingsSliderCallback=nullptr;
+    settingsScrollState={};settingsSliderTargets={};settingsScrollLayoutApplied=false;
     void (^remove)(void)=^{[settingsScroll.pointerContent cancelPending];[settingsScroll removeFromSuperview];settingsScroll=nil;};
     if (NSThread.isMainThread) remove();else dispatch_async(dispatch_get_main_queue(),remove);
 }
 extern "C" void SourceTouchSetSettingsScrollCallback(void (*scroll)(const char*,float)) {
     std::lock_guard<std::recursive_mutex> lock(mutex);settingsScrollCallback=scroll;
+}
+extern "C" void SourceTouchSetSettingsSliderCallback(void (*change)(const char*,const char*,float,bool)) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);settingsSliderCallback=change;
+}
+extern "C" void SourceTouchUpdateSettingsSliderTargets(const SourceTouchSettingsSliderTargets *targets) {
+    if(!NSThread.isMainThread || !targets || targets->struct_size!=sizeof(*targets) || targets->count>SOURCE_SETTINGS_SLIDER_LIMIT)return;
+    std::lock_guard<std::recursive_mutex> lock(mutex);settingsSliderTargets=*targets;
+}
+extern "C" bool SourceTouchSettingsSliderSet(const char *convar,float fraction,bool finished) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    if(!NSThread.isMainThread || !settingsScroll || settingsScroll.hidden || !convar || !std::isfinite(fraction) || fraction<0 || fraction>1 || !settingsSliderCallback)return false;
+    for(uint32_t i=0;i<settingsSliderTargets.count;++i)if(!std::strcmp(convar,settingsSliderTargets.sliders[i].convar)){
+        settingsEmitSlider(settingsScroll.tabID.UTF8String,convar,fraction,finished);return true;}
+    return false;
 }
 extern "C" void SourceTouchUpdateSettings(const SourceTouchSettingsState *settings) {
     if (!NSThread.isMainThread || !settings || settings->struct_size!=sizeof(*settings) || settings->slider_count>SOURCE_SETTINGS_SLIDER_LIMIT) return;

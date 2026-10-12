@@ -238,6 +238,7 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
 @property ICSMStartupProgressView *startupProgress;
 @property ICSMStartupAnnouncementView *announcement;
 @property NSDictionary *announcementResult;
+@property NSDictionary *completedStartupProgress;
 @property NSMutableArray *startupStages;
 @property UILabel *errorLabel;@property NSTimer *timer;@property long long lastSequence;@property NSString *lastCapture;
 @property BOOL synchronousStatusWrite;
@@ -267,6 +268,9 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
 -(BOOL)prefersStatusBarHidden{return YES;}
 -(void)viewDidLoad{
  [super viewDidLoad];self.startupBegan=NSProcessInfo.processInfo.systemUptime;
+ if(ICSMHasCompletedStartupAnnouncement(NSUserDefaults.standardUserDefaults,evidence))
+  self.announcementResult=@{@"visible":@NO,@"required_seconds":@(ICSMAnnouncementClock::requiredSeconds),
+   @"complete":@YES,@"skipped":@YES,@"policy":@"first_successful_data_start_only"};
  self.startupStages=[NSMutableArray array];
  self.startupProgress=[ICSMStartupProgressView new];
  self.startupProgress.translatesAutoresizingMaskIntoConstraints=NO;
@@ -358,7 +362,7 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
   [self.announcement.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
  ]];
  [self.view layoutIfNeeded];[self.announcement begin];
- printf("ICSM_ANNOUNCEMENT_BEGIN required_seconds=20\n");
+ printf("ICSM_ANNOUNCEMENT_BEGIN required_seconds=%.0f\n",ICSMAnnouncementClock::requiredSeconds);
 }
 -(void)showLoading:(NSString*)stage fraction:(double)fraction {
  if(self.startupFinished)return;
@@ -514,15 +518,19 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
      if(window!=cover && !window.hidden && [NSStringFromClass(window.class) isEqualToString:@"SDL_uikitwindow"]){gameWindow=window;break;}
     }
     if(gameWindow){
-     if(!self.announcement)[self beginAnnouncement];
-     if([self.announcement tick]){
+     if(!self.announcement && ![self.announcementResult[@"complete"] boolValue])[self beginAnnouncement];
+     if([self.announcementResult[@"complete"] boolValue] || [self.announcement tick]){
+     if(self.announcement){
      self.announcementResult=self.announcement.snapshot;
      NSMutableDictionary *announcementRecord=[self.announcementResult mutableCopy];
      announcementRecord[@"visible"]=@NO;announcementRecord[@"pid"]=@(getpid());
+     announcementRecord[@"skipped"]=@NO;announcementRecord[@"policy"]=@"first_successful_data_start_only";
      self.announcementResult=announcementRecord;
      [[NSJSONSerialization dataWithJSONObject:announcementRecord options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"startup-announcement.json"] atomically:YES];
+     ICSMMarkStartupAnnouncementCompleted(NSUserDefaults.standardUserDefaults);
      printf("ICSM_ANNOUNCEMENT_FINISHED foreground_seconds=%.3f\n",[announcementRecord[@"foreground_seconds"] doubleValue]);
      [self.announcement removeFromSuperview];self.announcement=nil;
+     }else printf("ICSM_ANNOUNCEMENT_SKIPPED reason=already_completed_first_data_start\n");
      self.startupFinished=YES;self.startupDuration=NSProcessInfo.processInfo.systemUptime-self.startupBegan;
      NSMutableDictionary *complete=[self.startupProgress.snapshot mutableCopy];
      complete[@"pid"]=@(getpid());complete[@"app_build"]=NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"";
@@ -534,6 +542,16 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
      id<UIWindowSceneDelegate> delegate=(id)self.gameScene.delegate;
      if([delegate respondsToSelector:@selector(setWindow:)])delegate.window=gameWindow;
      self.coverWindow=nil;
+     // The diagnostics timer intentionally outlives the launch controller.
+     // Retain its small final report, not the hidden storyboard/image/layer tree.
+     self.completedStartupProgress=self.startupProgress.snapshot;
+     for(UIViewController *child in [self.childViewControllers copy]) {
+      [child willMoveToParentViewController:nil];[child.view removeFromSuperview];[child removeFromParentViewController];
+     }
+     for(UIView *view in [self.view.subviews copy])[view removeFromSuperview];
+     self.startupProgress=nil;self.errorLabel=nil;self.importButton=nil;
+     self.exportLogsButton=nil;self.chooseZipButton=nil;self.view=nil;
+
      printf("ICSM_STARTUP_FINISHED duration=%.3f ready_frame=%llu reveal_frame=%llu\n",self.startupDuration,self.menuReadyFrame,frames);
      }
     }
@@ -562,18 +580,27 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
  NSDictionary *displayState=displayInputState(self.gameScene);
  if(sdl)dlclose(sdl);
  NSDictionary *videoState=@{};
+ NSDictionary *touchAimState=@{};
+ NSDictionary *controllerState=@{};
  if(hostReady && self.startupFinished) {
   void *client=dlopen([[NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"client_panorama.framework/client_panorama"] fileSystemRepresentation],RTLD_NOLOAD|RTLD_NOW);
   auto video=client?(size_t(*)(char*,size_t))dlsym(client,"SourceTouchVideoStateJSON"):nullptr;
-  char json[2048]={};size_t length=video?video(json,sizeof(json)):0;
+  char json[4096]={};size_t length=video?video(json,sizeof(json)):0;
   if(length && length<sizeof(json)){id decoded=[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:length] options:0 error:nil];if([decoded isKindOfClass:NSDictionary.class])videoState=decoded;}
+  auto aim=client?(size_t(*)(char*,size_t))dlsym(client,"SourceTouchAimStateJSON"):nullptr;
+  char aimJSON[1024]={};size_t aimLength=aim?aim(aimJSON,sizeof(aimJSON)):0;
+  if(aimLength && aimLength<sizeof(aimJSON)){id decoded=[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:aimJSON length:aimLength] options:0 error:nil];if([decoded isKindOfClass:NSDictionary.class])touchAimState=decoded;}
+  auto gamepad=client?(size_t(*)(char*,size_t))dlsym(client,"SourceTouchControllerStateJSON"):nullptr;
+  char padJSON[2048]={};size_t padLength=gamepad?gamepad(padJSON,sizeof(padJSON)):0;
+  if(padLength && padLength<sizeof(padJSON)){id decoded=[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:padJSON length:padLength] options:0 error:nil];if([decoded isKindOfClass:NSDictionary.class])controllerState=decoded;}
   if(client)dlclose(client);
  }
  task_vm_info_data_t info={};mach_msg_type_number_t count=TASK_VM_INFO_COUNT;task_info(mach_task_self(),TASK_VM_INFO,(task_info_t)&info,&count);
- NSDictionary *startup=@{@"visible":@(!self.startupFinished),@"menu_ready_observed":@(self.menuReadyObserved),@"ready_frame":@(self.menuReadyFrame),@"duration":@(self.startupDuration),@"progress":self.startupProgress.snapshot,
-  @"announcement":self.announcement?self.announcement.snapshot:self.announcementResult?:@{@"visible":@NO,@"required_seconds":@20,@"complete":@NO}};
- NSDictionary *status=@{@"milestone":@"I5",@"purpose":@"four-finger touch trial",@"display_name":NSBundle.mainBundle.infoDictionary[@"CFBundleDisplayName"]?:@"",@"video_state":videoState,@"network":networkInterfaceSnapshot(),@"display_input":displayState,@"screen_policy":screenPolicy?:@{},@"startup":startup,@"app_version":NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"",@"app_build":NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"",@"pid":@(getpid()),@"updated_utc":[[NSISO8601DateFormatter new] stringFromDate:NSDate.date],@"client_result":@(result.load()),@"command_sequence":@(self.lastSequence),@"capture_file":self.lastCapture?:@"",@"physical_footprint":@(info.phys_footprint),@"foreground":@(UIApplication.sharedApplication.applicationState==UIApplicationStateActive),@"host_ready":@(hostReady),@"metal":gpu,@"touch":touch,@"loaded_images":loadedImages()};
+ NSDictionary *startup=@{@"visible":@(!self.startupFinished),@"menu_ready_observed":@(self.menuReadyObserved),@"ready_frame":@(self.menuReadyFrame),@"duration":@(self.startupDuration),@"progress":self.completedStartupProgress?:self.startupProgress.snapshot?:@{},
+  @"announcement":self.announcement?self.announcement.snapshot:self.announcementResult?:@{@"visible":@NO,@"required_seconds":@(ICSMAnnouncementClock::requiredSeconds),@"complete":@NO,@"policy":@"first_successful_data_start_only"}};
+ NSDictionary *status=@{@"milestone":@"I5",@"purpose":@"four-finger touch trial",@"display_name":NSBundle.mainBundle.infoDictionary[@"CFBundleDisplayName"]?:@"",@"video_state":videoState,@"touch_aim":touchAimState,@"network":networkInterfaceSnapshot(),@"display_input":displayState,@"screen_policy":screenPolicy?:@{},@"startup":startup,@"app_version":NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"",@"app_build":NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"",@"pid":@(getpid()),@"updated_utc":[[NSISO8601DateFormatter new] stringFromDate:NSDate.date],@"client_result":@(result.load()),@"command_sequence":@(self.lastSequence),@"capture_file":self.lastCapture?:@"",@"physical_footprint":@(info.phys_footprint),@"foreground":@(UIApplication.sharedApplication.applicationState==UIApplicationStateActive),@"host_ready":@(hostReady),@"metal":gpu,@"touch":touch,@"loaded_images":loadedImages()};
  NSMutableDictionary *statusCopy=[frozenStatusValue(status) mutableCopy];
+ statusCopy[@"controller"]=controllerState;
  statusCopy[@"status_capture_ms"]=@((CFAbsoluteTimeGetCurrent()-statusBegan)*1000);
  statusCopy[@"status_write_async"]=@(!self.synchronousStatusWrite);
  NSDictionary *frozen=[statusCopy copy];NSString *path=[evidence stringByAppendingPathComponent:@"status.json"];

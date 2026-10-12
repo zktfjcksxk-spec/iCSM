@@ -1,0 +1,13 @@
+//-----------------------------------------------------------------------------
+//	panorama_text_pango.vpc
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Conditional "PANORAMA_TEXT_PANGO" "1"
+
+$Include "panorama_text_base.vpc"
+
+$Project "panorama_text_pango"
+{
+}

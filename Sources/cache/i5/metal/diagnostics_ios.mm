@@ -10,12 +10,13 @@ extern "C" NSDictionary *SourceMetalSpatialSnapshot();
 extern "C" NSDictionary *SourceMetalFrameInterpolationSnapshot();
 extern "C" void SourceMetalFrameInterpolationDrain();
 extern "C" NSDictionary *SourceMetalBufferSnapshot();
+extern "C" NSDictionary *SourceMetalMemorySnapshot();
 extern "C" __attribute__((visibility("default"))) NSDictionary *SourceMetalDeviceSnapshot() {
     auto d=g_sourceNativeDevice;
     if(!d)return @{@"attached":@NO};
     return @{@"attached":@YES,@"device":SourceMetal::device().name,@"registry_id":@(SourceMetal::device().registryID),
         @"device_class":NSStringFromClass([(id)SourceMetal::device() class]),@"allocated_bytes":@(SourceMetal::device().currentAllocatedSize),
-        @"buffers":SourceMetalBufferSnapshot(),@"frame_interpolation":SourceMetalFrameInterpolationSnapshot(),@"spatial_upscale":SourceMetalSpatialSnapshot(),@"pipeline_cache":SourceMetalPipelineSnapshot(),@"combat":SourceMetalCombatSnapshot(),@"performance":SourceMetalPerformanceSnapshot(),@"resolution_audit":SourceMetalResolutionAuditSnapshot(),@"shader_cache":SourceMetalShaderCacheSnapshot(),@"width":@(d->width),@"height":@(d->height),@"frames":@(d->frame),@"draws":@(d->draws),
+        @"memory":SourceMetalMemorySnapshot(),@"buffers":SourceMetalBufferSnapshot(),@"frame_interpolation":SourceMetalFrameInterpolationSnapshot(),@"spatial_upscale":SourceMetalSpatialSnapshot(),@"pipeline_cache":SourceMetalPipelineSnapshot(),@"combat":SourceMetalCombatSnapshot(),@"performance":SourceMetalPerformanceSnapshot(),@"resolution_audit":SourceMetalResolutionAuditSnapshot(),@"shader_cache":SourceMetalShaderCacheSnapshot(),@"width":@(d->width),@"height":@(d->height),@"frames":@(d->frame),@"draws":@(d->draws),
         @"pipelines":@(d->pipelines.size()),@"archive_dirty":@(d->archiveDirty),
         @"gamma_set":@(d->gammaSet),@"bc_supported":@(SourceMetal::device().supportsBCTextureCompression),
         @"last_status":@(d->lastSubmitted.status),@"last_error":d->lastSubmitted.error.localizedDescription ?: @""};

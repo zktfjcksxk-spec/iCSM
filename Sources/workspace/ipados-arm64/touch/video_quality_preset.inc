@@ -14,6 +14,8 @@ static const QualitySetting s_highQuality[] = {
     { "mat_powersavingsmode", "0" }, { "icsm_world_bump_detail", "1" }
 };
 static bool s_qualityChanging = false;
+static ICSMDisplay::Size s_qualityUIOutput = {0, 0};
+static double s_qualityDisplayCheck = 0;
 static ConVar icsm_quality_high_width( "icsm_quality_high_width", "0", FCVAR_ARCHIVE,
     "Saved per-device high-tier output width; zero captures the existing configuration.", true, 0, true, 16384 );
 static ConVar icsm_quality_high_height( "icsm_quality_high_height", "0", FCVAR_ARCHIVE,
@@ -47,6 +49,23 @@ static ICSMDisplay::Size QualityOutput()
     const int tier = icsm_quality_preset.GetInt();
     return tier == 3 ? high : tier == 2 ? ICSMDisplay::PhoneMedium(high)
         : ICSMDisplay::Preset(high,720,tier != 1);
+}
+static ICSMDisplay::Size QualityUIOutput()
+{
+    // Query the actual Metal drawable, including window size and display scale.
+    // RenderedSize is Source's backbuffer size, so cannot be used for this.
+    static bool (*display)(unsigned *, unsigned *, unsigned *) =
+        reinterpret_cast<bool (*)(unsigned *, unsigned *, unsigned *)>(
+            dlsym(RTLD_DEFAULT, "SourceMetalUIKitDisplay"));
+    ICSMDisplay::Size native = {0, 0}; unsigned hz = 0;
+    if ( display && display(&native.width, &native.height, &hz) ) return native;
+    int width=0,height=0; if(engine)engine->GetScreenSize(width,height);
+    return {unsigned(MAX(0,width)), unsigned(MAX(0,height))};
+}
+static ICSMDisplay::SceneResolution QualityScenePlan(ICSMDisplay::Size ui)
+{
+    ConVarRef scene("icsm_scene_render_percent", true);
+    return ICSMDisplay::ScenePlan(QualityOutput(), scene.IsValid()?scene.GetFloat():100.0f, ui);
 }
 static void ApplyQualityPreset()
 {
@@ -108,15 +127,35 @@ static void ApplyQualityPreset()
         icsm_fps_limit.SetValue( icsm_quality_unlocked_fps.GetInt() );
         ApplyFrameRateLimit( icsm_fps_limit.GetInt() );
     }
-    const ICSMDisplay::Size target = QualityOutput();
+    const ICSMDisplay::Size recipe = QualityOutput();
+    ConVarRef sceneWidth("icsm_scene_output_width", true), sceneHeight("icsm_scene_output_height", true);
+    if ( sceneWidth.IsValid() ) sceneWidth.SetValue(int(recipe.width));
+    if ( sceneHeight.IsValid() ) sceneHeight.SetValue(int(recipe.height));
+    // Only the UI/backbuffer follows the drawable. Scene dimensions retain the
+    // established preset budget; lower presets no longer shrink glyphs.
+    const ICSMDisplay::Size target = QualityUIOutput();
+    s_qualityUIOutput = target;
     if ( target.width && target.height && ( target.width != unsigned(width) || target.height != unsigned(height) ) ) {
         char command[256];
         V_snprintf( command, sizeof(command), "mat_setvideomode %u %u 0 0; mat_savechanges; host_writeconfig\n", target.width, target.height );
         engine->ClientCmd_Unrestricted( command );
     } else if ( changed ) engine->ClientCmd_Unrestricted( "mat_savechanges; host_writeconfig\n" );
     s_qualityChanging = false;
-    Msg( "ICSM_QUALITY_PRESET selected=%d output=%ux%u scene_percent=%g fps=%d locked=%d\n", tier,
-        target.width, target.height, scene.IsValid() ? scene.GetFloat() : 0, icsm_fps_limit.GetInt(), s_qualityFrameLocked );
+    const ICSMDisplay::SceneResolution plan = QualityScenePlan(target);
+    Msg( "ICSM_QUALITY_PRESET selected=%d ui=%ux%u scene_input=%ux%u scene_output=%ux%u scene_percent=%g fps=%d locked=%d\n", tier,
+        target.width, target.height, plan.input.width, plan.input.height, plan.output.width, plan.output.height,
+        scene.IsValid() ? scene.GetFloat() : 0, icsm_fps_limit.GetInt(), s_qualityFrameLocked );
+}
+static void CheckQualityDisplaySize()
+{
+    if ( !s_qualityReady || s_qualityChanging ) return;
+    const double now=Plat_FloatTime();
+    if ( now < s_qualityDisplayCheck ) return;
+    s_qualityDisplayCheck=now+1.0;
+    const ICSMDisplay::Size native = QualityUIOutput();
+    if ( native.width && native.height &&
+         ( native.width != s_qualityUIOutput.width || native.height != s_qualityUIOutput.height ) )
+        ApplyQualityPreset();
 }
 static void ApplyQualityPresetCommand( const CCommand & )
 {
@@ -127,12 +166,15 @@ static ConCommand icsm_apply_quality_preset( "icsm_apply_quality_preset", ApplyQ
     "Apply the graphics preset, preserving independent player options.", FCVAR_CLIENTCMD_CAN_EXECUTE );
 static void QualityPresetStateCommand( const CCommand & )
 {
-    const ICSMDisplay::Size output = QualityOutput();
+    const ICSMDisplay::Size output = QualityUIOutput();
     int width=0,height=0; if(engine)engine->GetScreenSize(width,height);
     Msg( "ICSM_QUALITY_PRESET_STATE selected=%d target=%ux%u actual=%dx%d high=%dx%d fps=%d unlocked_fps=%d locked=%d\n",
         icsm_quality_preset.GetInt(), output.width, output.height, width, height,
         icsm_quality_high_width.GetInt(), icsm_quality_high_height.GetInt(), icsm_fps_limit.GetInt(),
         icsm_quality_unlocked_fps.GetInt(), s_qualityFrameLocked );
+    const ICSMDisplay::SceneResolution plan=QualityScenePlan(output);
+    Msg("ICSM_UI_RESOLUTION ui=%ux%u scene_input=%ux%u scene_output=%ux%u independent=1\n",
+        output.width,output.height,plan.input.width,plan.input.height,plan.output.width,plan.output.height);
     for ( unsigned i = 0; i < ARRAYSIZE( s_highQuality ); ++i ) {
         ConVarRef value( s_highQuality[i].name, true );
         const float expected = QualitySettingValue(s_highQuality[i]);
