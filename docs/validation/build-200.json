@@ -2,9 +2,9 @@
   "version": "0.7.2",
   "build": 200,
   "ipa": {
-    "ipa": "iCSM-unsigned.ipa",
-    "sha256": "53751dc74832b757ecd7ffef9cd560fde26dd17c1bb1937965025cb880804337",
-    "bytes": 154432218,
+    "ipa": "iCSM-Build200-unsigned.ipa",
+    "sha256": "c462a74d25e57de0b8833d8b153c545743410a5eb8edfe278009e8aa420677e0",
+    "bytes": 154432318,
     "version": "0.7.2",
     "build": "200",
     "bundle_id": "com.icsm.client",
@@ -24,7 +24,8 @@
     "parts": 11,
     "zip_crc_verified": true,
     "parts_and_join_sha256_verified": true,
-    "compatible_with_previously_verified_data": true
+    "compatible_with_previously_verified_data": true,
+    "archive_name": "iCSM-v2.zip"
   },
   "mobile_sources": {
     "native_jobs": 3862,
@@ -43,5 +44,12 @@
     "inventory_protocol": 2,
     "schema_matches_mobile": true,
     "changed_gameplay_source_units": 7
+  },
+  "packaging_revision": {
+    "name": "V2 filename compatibility",
+    "game_build_unchanged": true,
+    "data_payload_unchanged": true,
+    "importer_regression_passed": true,
+    "v2_and_legacy_join_passed": true
   }
 }

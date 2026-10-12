@@ -13,7 +13,7 @@ sudo apt-get install -y clang lld cmake ninja-build python3 libssl-dev libcurl4-
 cd Server/ubuntu-x86_64
 bash tools/build-server.sh
 python3 tools/audit_elf.py
-python3 tools/package_runtime.py --build build --data /path/to/iCSM-v1.zip --output /path/to/iCSM-Server
+python3 tools/package_runtime.py --build build --data /path/to/iCSM-v2.zip --output /path/to/iCSM-Server
 cd /path/to/iCSM-Server
 ```
 
@@ -31,7 +31,7 @@ Do not replace an existing server directory in place: keep its password, setting
 
 源码位于 `Server/ubuntu-x86_64`，发布附件也提供独立的 `iCSM-Server-Source.zip`。这是无图形界面的 Linux 服务端；不包含 macOS 游戏，不需要 Metal、超分或插帧。
 
-在 Ubuntu22.04+ 的 Intel／AMD x86_64 服务器上执行上方命令。独立源码 ZIP 解压后进入 `iCSM-Server-Source` 目录，运行同样的构建与打包命令。`--data` 指向合并后的完整 `iCSM-v1.zip`，不能使用单个分卷。
+在 Ubuntu22.04+ 的 Intel／AMD x86_64 服务器上执行上方命令。独立源码 ZIP 解压后进入 `iCSM-Server-Source` 目录，运行同样的构建与打包命令。`--data` 指向合并后的完整 `iCSM-v2.zip`，不能使用单个分卷。
 
 生成运行目录后，在 `server-settings.json` 设置自己的至少8位密码，再运行 `./check-server.sh`、`python3 run_server.py --check-config` 和 `./start-server.sh`。CPU需要 `cx16`，自行允许防火墙／安全组的游戏UDP端口，默认27015；RCON默认关闭，脚本不会代改防火墙。
 

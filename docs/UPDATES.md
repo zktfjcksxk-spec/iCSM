@@ -1,3 +1,9 @@
+## Data package filename update — V2
+
+The current Build 200 data package is named `iCSM-v2.zip`. Release volumes and the join helper use the same name. Only the filename changed; data contents, SHA-256 and app/data identity are unchanged. File-sharing import now prefers V2 and still accepts the exact legacy names `iCSM-v1.zip` and `iCSM-Data.zip`. The file picker continues to accept renamed matching ZIPs.
+
+当前 Build200 数据包改名为 `iCSM-v2.zip`，GitHub 分卷与合并脚本同步。资源内容、SHA-256 和配套身份保持不变；新版文件共享导入优先识别 V2，同时兼容旧文件名。游戏版本仍为 Build200。
+
 <a name="english"></a>
 
 # Build 200 · October 12, 2026

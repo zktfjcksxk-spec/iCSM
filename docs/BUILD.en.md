@@ -2,7 +2,7 @@
 
 [简体中文](BUILD.md) | English
 
-This source kit targets iPhone and iPad. The native Source game modules, SDL, and Metal backend are compiled locally from source. It does not include precompiled game frameworks, the author's signing credentials, account settings, or device configuration. Third-party static dependencies such as V8 and font/video libraries, along with generated protocol headers, are provided. Maps, materials, skin previews, and offline shader libraries are supplied separately in `iCSM-v1.zip`.
+This source kit targets iPhone and iPad. The native Source game modules, SDL, and Metal backend are compiled locally from source. It does not include precompiled game frameworks, the author's signing credentials, account settings, or device configuration. Third-party static dependencies such as V8 and font/video libraries, along with generated protocol headers, are provided. Maps, materials, skin previews, and offline shader libraries are supplied separately in `iCSM-v2.zip`.
 
 ## Windows / browser-based builds
 
@@ -39,10 +39,10 @@ The IPA contains ARM64 iOS modules and does not depend on Rosetta or runtime CPU
 
 **Full GitHub builds:** [combine the data volumes](DATA_BUILD.md#combine-and-install) from the same Release as your IPA. **Original app-only builds:** download [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA).
 
-You can open the installed app before importing data; it will show the import instructions. Keep the filename exactly `iCSM-v1.zip`. Do not extract the archive on your computer.
+You can open the installed app before importing data; it will show the import instructions. Keep the filename exactly `iCSM-v2.zip`. Do not extract the archive on your computer.
 
-- **Mac**: Finder → connected device → Files → iCSM. Drag `iCSM-v1.zip` into iCSM.
-- **Windows**: Apple Devices → connected device → Files → iCSM → Add File. Select `iCSM-v1.zip`.
+- **Mac**: Finder → connected device → Files → iCSM. Drag `iCSM-v2.zip` into iCSM.
+- **Windows**: Apple Devices → connected device → Files → iCSM → Add File. Select `iCSM-v2.zip`.
 
 Leave the app on its import screen while copying. **Wait for the computer to confirm that the transfer has finished**, then tap **“检查并导入” (Check and Import)** in the app. Do not replace game data during a match. Alternatively, use the iOS Files app to place the archive in **On My iPhone / iPad → iCSM**.
 

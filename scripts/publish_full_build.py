@@ -39,7 +39,7 @@ def main():
     if not re.fullmatch(r'\d+', run_id) or not re.fullmatch(r'\d+', attempt):
         raise ValueError('Invalid workflow run ID')
     tag = f'mobile-build-{run_id}-{attempt}'
-    index = json.loads((destination / 'iCSM-v1.zip.parts.json').read_text())
+    index = json.loads((destination / 'iCSM-v2.zip.parts.json').read_text())
     report = json.loads((ROOT / 'Build/ipa-report.json').read_text())
     manifest = json.loads((destination / 'distribution-assets.json').read_text())
     if not index['data_identity'] == report['data_identity'] == manifest['identity']:
@@ -66,10 +66,10 @@ def main():
         f"iCSM {report['version']} (Build {report['build']}), iPhone/iPad ARM64, iOS/iPadOS 27+.\n\n"
         'This release contains a paired app and data export built entirely from GitHub inputs. '
         'Re-sign iCSM-unsigned.ipa with your own Apple account before installation.\n\n'
-        'Download every iCSM-v1.zip.partNNN file, iCSM-v1.zip.parts.json and join_data.py into one folder. '
+        'Download every iCSM-v2.zip.partNNN file, iCSM-v2.zip.parts.json and join_data.py into one folder. '
         'Run `python join_data.py` on Windows or `python3 join_data.py` on macOS/Linux. '
-        'Import the resulting iCSM-v1.zip without extracting it. Use the IPA and data from this same release.\n\n'
-        '下载全部分卷、parts.json 和 join_data.py 到同一文件夹，运行脚本合并为 iCSM-v1.zip；'
+        'Import the resulting iCSM-v2.zip without extracting it. Use the IPA and data from this same release.\n\n'
+        '下载全部分卷、parts.json 和 join_data.py 到同一文件夹，运行脚本合并为 iCSM-v2.zip；'
         '用自己的 Apple 账户重签名 IPA，再在游戏初始页导入 ZIP。IPA 与数据包必须来自本次同一构建。\n\n'
         f"Source: {os.environ['GITHUB_SHA']}\nData identity: {index['data_identity']}\n"
         f"Workflow: https://github.com/{repository}/actions/runs/{run_id}\n"

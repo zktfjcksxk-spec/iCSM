@@ -115,14 +115,16 @@ static BOOL prepareInstallation(NSString *documents,NSString *cache,NSDictionary
     NSMutableDictionary *receipts=([decoded[@"identity"] isEqual:manifest[@"identity"]] &&
         [decoded[@"files"] isKindOfClass:NSDictionary.class])?[decoded[@"files"] mutableCopy]:[NSMutableDictionary dictionary];
     NSMutableDictionary *record=[@{@"identity":manifest[@"identity"],@"files":receipts} mutableCopy];
-    // v1 is the public release filename. Retain the previous exact filename
-    // for upgrades; never glob arbitrary ZIPs or broaden the asset whitelist.
-    NSString *archiveName=@"iCSM-v1.zip";
-    if(![fm fileExistsAtPath:[documents stringByAppendingPathComponent:archiveName]] &&
-       [fm fileExistsAtPath:[documents stringByAppendingPathComponent:@"iCSM-Data.zip"]])archiveName=@"iCSM-Data.zip";
+    // Prefer the current public filename and retain exact legacy names.
+    // Never glob arbitrary ZIPs or broaden the asset whitelist.
+    NSArray<NSString *> *archiveNames=@[@"iCSM-v2.zip",@"iCSM-v1.zip",@"iCSM-Data.zip"];
+    NSString *archiveName=archiveNames.firstObject;
+    for(NSString *candidate in archiveNames) {
+        if([fm fileExistsAtPath:[documents stringByAppendingPathComponent:candidate]]){archiveName=candidate;break;}
+    }
     NSString *archivePath=[documents stringByAppendingPathComponent:archiveName];
     if(selectedArchive){archivePath=selectedArchive.path;archiveName=selectedArchive.lastPathComponent;}
-    context[@"archive_name"]=archiveName;context[@"archive_path"]=archivePath;context[@"accepted_package_names"]=@[@"iCSM-v1.zip",@"iCSM-Data.zip"];
+    context[@"archive_name"]=archiveName;context[@"archive_path"]=archivePath;context[@"accepted_package_names"]=archiveNames;
     context[@"archive_source"]=selectedArchive?@"document_picker":@"file_sharing";
     if(selectedArchive) {
         NSMutableDictionary *operation=installStep(context,@"open_selected_archive",archiveName);
@@ -192,7 +194,7 @@ static BOOL prepareInstallation(NSString *documents,NSString *cache,NSDictionary
                     if(positions.find(name.UTF8String)==positions.end() && absent.count<20)[absent addObject:name];
                 operation[@"missing_entry_sample"]=absent;
             }
-            unzClose(zip);return fail(error,@"数据包与当前应用不匹配、未复制完成，或包含无效路径。请使用配套的 iCSM-v1.zip。");
+            unzClose(zip);return fail(error,@"数据包与当前应用不匹配、未复制完成，或包含无效路径。请使用配套的 iCSM-v2.zip。");
         }
     }
     NSMutableArray *missing=[NSMutableArray array];unsigned long long done=0,required=0;
@@ -220,7 +222,7 @@ static BOOL prepareInstallation(NSString *documents,NSString *cache,NSDictionary
     context[@"missing_files"]=@(missing.count);context[@"missing_file_sample"]=[missing subarrayWithRange:NSMakeRange(0,MIN(missing.count,(NSUInteger)20))];context[@"import_bytes_required"]=@(required);
     installStep(context,@"write_receipts",receiptPath);
     if(!writeJSON(record,receiptPath,error)){if(zip)unzClose(zip);return NO;}
-    if(missing.count && !zip){installStep(context,@"locate_data_package")[@"reason"]=@"package_missing";return fail(error,[NSString stringWithFormat:@"请导入配套数据包 iCSM-v1.zip（缺少 %lu 个文件）。\n点击左上角“选择数据包 ZIP”，从“文件”中选择。\n也可用 Finder / Apple Devices 复制到 iCSM，\n传输完成后点击“检查并导入”。",(unsigned long)missing.count]);}
+    if(missing.count && !zip){installStep(context,@"locate_data_package")[@"reason"]=@"package_missing";return fail(error,[NSString stringWithFormat:@"请导入配套数据包 iCSM-v2.zip（缺少 %lu 个文件）。\n点击左上角“选择数据包 ZIP”，从“文件”中选择。\n也可用 Finder / Apple Devices 复制到 iCSM，\n传输完成后点击“检查并导入”。",(unsigned long)missing.count]);}
     if(missing.count) {
         NSMutableDictionary *operation=installStep(context,@"check_free_space");NSError *diskError=nil;
         NSDictionary *disk=[fm attributesOfFileSystemForPath:documents error:&diskError];

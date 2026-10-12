@@ -22,7 +22,7 @@ A personal CSGO port by **BILIBILI @SU_ZeShin** for **iPhone and iPad**, running
 
 ## Build and install
 
-**Build both files using GitHub:** run **Actions → Build iCSM IPA + Data** to compile the IPA and matching Metal shaders and publish the paired data package in Releases. Download all data volumes and use `join_data.py` to get `iCSM-v1.zip`. See the [GitHub-only build guide](docs/DATA_BUILD.md), including private-input access for forks. The published Build 200 pair was exported and verified locally. The full IPA + Data cloud workflow has not been executed; the previous successful cloud build verifies Build 149 only.
+**Build both files using GitHub:** run **Actions → Build iCSM IPA + Data** to compile the IPA and matching Metal shaders and publish the paired data package in Releases. Download all data volumes and use `join_data.py` to get `iCSM-v2.zip`. See the [GitHub-only build guide](docs/DATA_BUILD.md), including private-input access for forks. The published Build 200 pair was exported and verified locally. The full IPA + Data cloud workflow has not been executed; the previous successful cloud build verifies Build 149 only.
 
 **Windows / app-only cloud builds:** follow the [cloud build guide](docs/CLOUD_BUILD.en.md), or download the [published Build 200 IPA and matching data](https://github.com/zktfjcksxk-spec/iCSM/releases/tag/v0.7.2-build200). Sign the IPA with your own Apple account. The commands below are for local Mac builds.
 
@@ -54,7 +54,7 @@ For the original app-only workflow, **download [iCSM-v1.zip (iCloud)](https://ww
 
 The app and game data are distributed separately. On the initial screen, tap **“选择数据包 ZIP” (Select Data ZIP)** and select the downloaded package from Files (On My iPhone / iPad or iCloud Drive). No extraction or manual move into the app directory is needed; this method preserves the original ZIP. Failed imports can be diagnosed with **“导出报错日志” (Export Error Logs)** at the top right.
 
-Alternatively, transfer **`iCSM-v1.zip`** to the app's file-sharing directory:
+Alternatively, transfer **`iCSM-v2.zip`** to the app's file-sharing directory:
 
 - **macOS**: Finder → your device → Files → iCSM.
 - **Windows**: Apple Devices → your device → Files → iCSM → Add File.
@@ -93,7 +93,7 @@ This is a personal port. **Commercial use is prohibited.** CSGO, the Source engi
 
 ## 编译与安装
 
-**仅通过 GitHub 生成两个文件：** 运行 **Actions → Build iCSM IPA + Data**，重新编译 IPA 和配套着色器、生成数据包并放到 GitHub Releases。下载所有数据分卷，用 `join_data.py` 合并为 `iCSM-v1.zip`。操作和 Fork 权限说明见 [完整指南](docs/DATA_BUILD.md#简体中文)。本次 Build200 配套 IPA／数据已在本地导出并校验；完整云流程仍未运行，Build149 的云成功记录仅证明旧版。
+**仅通过 GitHub 生成两个文件：** 运行 **Actions → Build iCSM IPA + Data**，重新编译 IPA 和配套着色器、生成数据包并放到 GitHub Releases。下载所有数据分卷，用 `join_data.py` 合并为 `iCSM-v2.zip`。操作和 Fork 权限说明见 [完整指南](docs/DATA_BUILD.md#简体中文)。本次 Build200 配套 IPA／数据已在本地导出并校验；完整云流程仍未运行，Build149 的云成功记录仅证明旧版。
 
 **Windows / 仅编译 IPA：** 原有[云编译指南](docs/CLOUD_BUILD.md)保留，配合原冻结 iCloud 数据包使用。IPA 需用自己的 Apple 账户签名安装。下方命令用于 Mac 本机编译。
 
@@ -125,7 +125,7 @@ This is a personal port. **Commercial use is prohibited.** CSGO, the Source engi
 
 应用与游戏数据分开提供。初始页点击左上角 **“选择数据包 ZIP”**，从系统“文件”的“我的 iPhone / iPad”或 iCloud Drive 选择已下载的数据包，无需解压或手动搬入应用目录，此方式保留原 ZIP。导入失败时，可直接点击右上角 **“导出报错日志”** 查看原因。
 
-也可将配套 **`iCSM-v1.zip`** 导入 iCSM 的文件共享目录：
+也可将配套 **`iCSM-v2.zip`** 导入 iCSM 的文件共享目录：
 
 - **macOS**：Finder → 设备 → 文件 → iCSM。
 - **Windows**：Apple Devices → 设备 → 文件 → iCSM → 添加文件。

@@ -91,7 +91,7 @@ def verify(ipa, unsigned=False, data_manifest=None):
         if unsigned:
             require(not any(name.endswith(('.mobileprovision', '.p12', '.pfx', '.keychain')) for name in names),
                     'Personal signing material found in the cloud export')
-        require(not any('/game-assets/' in name or name.endswith(('iCSM-Data.zip', 'iCSM-v1.zip')) for name in names),
+        require(not any('/game-assets/' in name or name.endswith(('iCSM-Data.zip', 'iCSM-v1.zip', 'iCSM-v2.zip')) for name in names),
                 'Game data must be imported separately')
     with ipa.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest() if hasattr(hashlib, 'file_digest') else None

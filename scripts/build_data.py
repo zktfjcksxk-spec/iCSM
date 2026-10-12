@@ -335,7 +335,7 @@ def package(args):
     identity = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     require(files == manifest['files'] and identity == manifest['identity'], 'App/data manifest mismatch')
     seen = set()
-    with VolumeWriter(args.output, 'iCSM-v1.zip') as volumes:
+    with VolumeWriter(args.output, 'iCSM-v2.zip') as volumes:
         with zipfile.ZipFile(volumes, 'w', allowZip64=True) as output:
             with ReleaseStream(index, args.repository or index['repository'], args.cache) as source:
                 with io.BufferedReader(source, buffer_size=BLOCK) as buffered:
@@ -373,7 +373,7 @@ def package(args):
     print('Cloud ZIP directory and CRC validation complete', flush=True)
     result.update(data_identity=identity, files=len(files), shader_count=len(libraries),
                   source_commit=os.environ.get('GITHUB_SHA', ''))
-    write_json(args.output / 'iCSM-v1.zip.parts.json', result)
+    write_json(args.output / 'iCSM-v2.zip.parts.json', result)
     write_json(args.output / 'distribution-assets.json', manifest)
     sums = [f"{item['sha256']}  {item['name']}" for item in result['parts']]
     sums.append(f"{result['sha256']}  {result['output']}")

@@ -181,7 +181,7 @@ def main():
     if args.bundle_id and not re.fullmatch(r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+', args.bundle_id):
         parser.error('Use a reverse-domain bundle ID containing letters, digits, hyphens and dots')
     if sys.platform!='darwin':
-        raise SystemExit('Build/sign locally on macOS with Xcode, or use GitHub Actions from Windows (docs/CLOUD_BUILD.en.md). Import iCSM-v1.zip through Files or Apple Devices.')
+        raise SystemExit('Build/sign locally on macOS with Xcode, or use GitHub Actions from Windows (docs/CLOUD_BUILD.en.md). Import iCSM-v2.zip through Files or Apple Devices.')
     if args.action == 'doctor':
         print('Xcode: ' + output(['xcodebuild','-version']))
         print('iOS SDK: ' + output(['xcrun','--sdk','iphoneos','--show-sdk-version']))

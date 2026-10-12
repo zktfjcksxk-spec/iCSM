@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Join GitHub data volumes into iCSM-v1.zip with SHA-256 validation (Windows/macOS/Linux)."""
+"""Join GitHub data volumes into iCSM-v2.zip with SHA-256 validation (Windows/macOS/Linux)."""
 import argparse
 import hashlib
 import json
@@ -9,11 +9,11 @@ import re
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('index', type=Path, nargs='?', default=Path('iCSM-v1.zip.parts.json'))
+    parser.add_argument('index', type=Path, nargs='?', default=Path('iCSM-v2.zip.parts.json'))
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     index = json.loads(args.index.read_text(encoding='utf-8'))
-    if index.get('output') != 'iCSM-v1.zip' or not index.get('parts'):
+    if index.get('output') not in ('iCSM-v2.zip', 'iCSM-v1.zip') or not index.get('parts'):
         raise ValueError('Invalid data volume index')
     target = args.output or args.index.parent / index['output']
     if target.exists():
@@ -25,7 +25,7 @@ def main():
         with partial.open('xb') as output:
             for number, part in enumerate(index['parts'], 1):
                 name = part['name']
-                if name != f'iCSM-v1.zip.part{number:03d}' or not re.fullmatch('[a-f0-9]{64}', part['sha256']):
+                if name != f"{index['output']}.part{number:03d}" or not re.fullmatch('[a-f0-9]{64}', part['sha256']):
                     raise ValueError('Invalid volume name or hash: ' + name)
                 source = args.index.parent / name
                 if source.stat().st_size != part['size']:

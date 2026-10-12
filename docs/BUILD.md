@@ -1,6 +1,6 @@
 # iCSM 自行编译与数据导入
 
-本套件只用于 iPhone / iPad。原生 Source 游戏模块、SDL 和 Metal 后端由本地源码编译；套件不含已经编译的游戏框架、作者签名、账户或设备配置。V8、字体/视频等第三方静态依赖以及构建时生成的协议头文件已提供。游戏地图、材质、皮肤预览与离线着色器另在 `iCSM-v1.zip` 中。
+本套件只用于 iPhone / iPad。原生 Source 游戏模块、SDL 和 Metal 后端由本地源码编译；套件不含已经编译的游戏框架、作者签名、账户或设备配置。V8、字体/视频等第三方静态依赖以及构建时生成的协议头文件已提供。游戏地图、材质、皮肤预览与离线着色器另在 `iCSM-v2.zip` 中。
 
 Windows 或仅通过 GitHub 生成 **IPA 与配套数据包**，请使用新工作流 **Build iCSM IPA + Data**，见[完整指南](DATA_BUILD.md#简体中文)。新流程从真实 MSL 编译着色器，使用 GitHub 上的资源输入打包；须导入同次 Release 的数据，不能直接沿用旧 iCloud 包。
 
@@ -29,10 +29,10 @@ IPA 中包含 ARM64 iOS 模块，不包含 macOS 游戏、不依赖 Rosetta 或�
 
 **从 Mac / Windows 文件共享导入**：
 
-安装应用后可以先打开，会显示导入说明。将提供的文件保留为精确名称 `iCSM-v1.zip`，无需在电脑上解包，也无需复制到某个隐藏目录：
+安装应用后可以先打开，会显示导入说明。将提供的文件保留为精确名称 `iCSM-v2.zip`，无需在电脑上解包，也无需复制到某个隐藏目录：
 
-- **Mac**：Finder → 连接的设备 → 文件 → iCSM，将 `iCSM-v1.zip` 拖到 iCSM。
-- **Windows**：Apple Devices → 连接的设备 → 文件 → iCSM → 添加文件，选中 `iCSM-v1.zip`。
+- **Mac**：Finder → 连接的设备 → 文件 → iCSM，将 `iCSM-v2.zip` 拖到 iCSM。
+- **Windows**：Apple Devices → 连接的设备 → 文件 → iCSM → 添加文件，选中 `iCSM-v2.zip`。
 
 复制时让游戏停留在导入页。**等待电脑明确完成复制**，然后点击游戏中的“检查并导入”。不要在游戏对局运行期间替换数据。也可以通过 iOS“文件”App 将同名数据包移入“我的 iPhone / iPad → iCSM”。
 

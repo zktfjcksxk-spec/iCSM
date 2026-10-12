@@ -19,5 +19,6 @@ __pycache__/
 *.zip.partial
 
 /iCSM-v1.zip
+/iCSM-v2.zip
 /Data/*.part*
 /Data/*.tar.gz
